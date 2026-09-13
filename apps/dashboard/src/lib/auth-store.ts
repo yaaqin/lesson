@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DUMMY_ACCOUNTS, type DummyAccount, type OrgRole, type PlatformRole } from "./dummy-accounts";
+import { apiLogin, apiLogout } from "./api-client";
+import { DUMMY_ACCOUNTS, type OrgRole, type PlatformRole } from "./dummy-accounts";
 import { getRegistrations } from "./org-registrations-store";
 
 const SESSION_KEY = "mathquest_dashboard_session_v1";
@@ -12,6 +13,8 @@ export type Session =
       email: string;
       displayName: string;
       platformRole: PlatformRole;
+      accessToken: string;
+      refreshToken: string;
     }
   | {
       area: "org";
@@ -59,37 +62,42 @@ function setSession(next: Session | null) {
   listeners.forEach((listener) => listener());
 }
 
-function toSession(account: DummyAccount): Session {
-  if (account.area === "admin") {
-    return {
-      area: "admin",
-      email: account.email,
-      displayName: account.displayName,
-      platformRole: account.platformRole,
-    };
-  }
-  return {
-    area: "org",
-    email: account.email,
-    displayName: account.displayName,
-    orgRole: account.orgRole,
-    organizationId: account.organizationId,
-    organizationName: account.organizationName,
-  };
-}
-
 export type LoginResult =
   | { ok: true; session: Session }
   | { ok: false; reason: "invalid" | "pending" | "rejected" };
 
-export function login(email: string, password: string): LoginResult {
+export async function login(email: string, password: string): Promise<LoginResult> {
   const normalizedEmail = email.trim().toLowerCase();
 
+  // 1) coba lewat backend Go beneran dulu — ini jalur akun admin platform.
+  const apiResult = await apiLogin(normalizedEmail, password);
+  if (apiResult.ok) {
+    const { user, accessToken, refreshToken } = apiResult.data;
+    const session: Session = {
+      area: "admin",
+      email: user.email,
+      displayName: user.displayName,
+      platformRole: user.role === "student" ? "admin" : user.role,
+      accessToken,
+      refreshToken,
+    };
+    setSession(session);
+    return { ok: true, session };
+  }
+
+  // 2) fallback ke akun dummy organisasi (backend org belum ada)
   const seedMatch = DUMMY_ACCOUNTS.find(
     (acc) => acc.email.toLowerCase() === normalizedEmail && acc.password === password,
   );
   if (seedMatch) {
-    const session = toSession(seedMatch);
+    const session: Session = {
+      area: "org",
+      email: seedMatch.email,
+      displayName: seedMatch.displayName,
+      orgRole: seedMatch.orgRole,
+      organizationId: seedMatch.organizationId,
+      organizationName: seedMatch.organizationName,
+    };
     setSession(session);
     return { ok: true, session };
   }
@@ -114,7 +122,11 @@ export function login(email: string, password: string): LoginResult {
 }
 
 export function logout() {
+  const current = getSnapshot();
   setSession(null);
+  if (current?.area === "admin") {
+    apiLogout(current.accessToken);
+  }
 }
 
 export function useSession() {

@@ -1,35 +1,21 @@
-// Akun dummy — belum tersambung ke Postgres/Go API.
-// Password sengaja plaintext & sederhana karena ini cuma buat demo dashboard.
+// Akun organisasi masih dummy (localStorage) — backend org belum dibangun.
+// Akun admin platform SUDAH lewat backend beneran (lihat api-client.ts / auth-store.ts),
+// jadi tidak ada lagi entri dummy untuk area "admin" di sini.
 
-export type PlatformRole = "superadmin" | "admin";
 export type OrgRole = "owner" | "admin" | "teacher";
+export type PlatformRole = "superadmin" | "admin";
 
-export type DummyAccount =
-  | {
-      area: "admin";
-      email: string;
-      password: string;
-      displayName: string;
-      platformRole: PlatformRole;
-    }
-  | {
-      area: "org";
-      email: string;
-      password: string;
-      displayName: string;
-      orgRole: OrgRole;
-      organizationId: string;
-      organizationName: string;
-    };
+export type DummyAccount = {
+  area: "org";
+  email: string;
+  password: string;
+  displayName: string;
+  orgRole: OrgRole;
+  organizationId: string;
+  organizationName: string;
+};
 
 export const DUMMY_ACCOUNTS: DummyAccount[] = [
-  {
-    area: "admin",
-    email: "superadmin@mathquest.dev",
-    password: "password123",
-    displayName: "Bimo",
-    platformRole: "superadmin",
-  },
   {
     area: "org",
     email: "owner@sekolahsatu.sch.id",

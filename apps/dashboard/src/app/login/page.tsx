@@ -6,10 +6,10 @@ import { useState, type FormEvent } from "react";
 import { login } from "@/lib/auth-store";
 
 const HINT_ACCOUNTS = [
-  { email: "superadmin@mathquest.dev", label: "Admin Platform" },
-  { email: "owner@sekolahsatu.sch.id", label: "Pemilik Organisasi" },
-  { email: "admin@sekolahsatu.sch.id", label: "Admin Organisasi" },
-  { email: "guru@sekolahsatu.sch.id", label: "Guru" },
+  { email: "admin@mathquest.dev", password: "admin12345", label: "Admin Platform (backend asli)" },
+  { email: "owner@sekolahsatu.sch.id", password: "password123", label: "Pemilik Organisasi (dummy)" },
+  { email: "admin@sekolahsatu.sch.id", password: "password123", label: "Admin Organisasi (dummy)" },
+  { email: "guru@sekolahsatu.sch.id", password: "password123", label: "Guru (dummy)" },
 ];
 
 const ERROR_MESSAGE: Record<string, string> = {
@@ -23,10 +23,14 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = login(email, password);
+    setError(null);
+    setSubmitting(true);
+    const result = await login(email, password);
+    setSubmitting(false);
     if (!result.ok) {
       setError(ERROR_MESSAGE[result.reason]);
       return;
@@ -44,7 +48,7 @@ export default function LoginPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Masuk Dashboard</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-500">
-            Data akun masih dummy, belum tersambung ke backend.
+            Akun admin platform lewat backend beneran, akun organisasi masih dummy.
           </p>
         </div>
 
@@ -80,9 +84,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="rounded-full bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+            disabled={submitting}
+            className="rounded-full bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] disabled:opacity-50 dark:hover:bg-[#ccc]"
           >
-            Masuk
+            {submitting ? "Memproses…" : "Masuk"}
           </button>
         </form>
 
@@ -98,13 +103,16 @@ export default function LoginPage() {
       </div>
 
       <div className="flex w-full max-w-sm flex-col gap-2 rounded-2xl border border-dashed border-black/[.08] p-4 text-xs text-zinc-500 dark:border-white/[.145] dark:text-zinc-500">
-        <span className="font-medium text-zinc-600 dark:text-zinc-400">
-          Akun dummy (password: password123)
-        </span>
+        <span className="font-medium text-zinc-600 dark:text-zinc-400">Akun contoh</span>
         {HINT_ACCOUNTS.map((acc) => (
-          <div key={acc.email} className="flex items-center justify-between">
-            <span className="font-mono">{acc.email}</span>
-            <span>{acc.label}</span>
+          <div key={acc.email} className="flex flex-col">
+            <div className="flex items-center justify-between">
+              <span className="font-mono">{acc.email}</span>
+              <span>{acc.label}</span>
+            </div>
+            <span className="font-mono text-zinc-400 dark:text-zinc-600">
+              password: {acc.password}
+            </span>
           </div>
         ))}
       </div>

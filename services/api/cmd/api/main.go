@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"lesson/api/internal/authsvc"
 	"lesson/api/internal/config"
 	"lesson/api/internal/httpserver"
 )
@@ -20,7 +21,8 @@ func main() {
 	}
 	defer db.Close()
 
-	srv := httpserver.New(db)
+	auth := authsvc.NewService(db, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	srv := httpserver.New(db, auth, cfg.AllowedOrigins)
 
 	log.Printf("api listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, srv.Handler()); err != nil {
