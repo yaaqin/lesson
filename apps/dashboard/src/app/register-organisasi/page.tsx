@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { submitRegistration } from "@/lib/org-registrations-store";
+import { submitRegistration } from "@/store/org-registrations-store";
 
 export default function RegisterOrganisasiPage() {
   const [organizationName, setOrganizationName] = useState("");

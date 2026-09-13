@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { login } from "@/lib/auth-store";
+import { useLoginMutation } from "@/hooks/use-auth";
 
 const HINT_ACCOUNTS = [
   { email: "admin@mathquest.dev", password: "admin12345", label: "Admin Platform (backend asli)" },
@@ -23,19 +23,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const loginMutation = useLoginMutation();
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
-    setSubmitting(true);
-    const result = await login(email, password);
-    setSubmitting(false);
-    if (!result.ok) {
-      setError(ERROR_MESSAGE[result.reason]);
-      return;
+    try {
+      const result = await loginMutation.mutateAsync({ identifier: email, password });
+      if (!result.ok) {
+        setError(ERROR_MESSAGE[result.reason]);
+        return;
+      }
+      router.push(result.session.area === "admin" ? "/admin" : "/org");
+    } catch {
+      setError("Gagal menghubungi server, coba lagi.");
     }
-    router.push(result.session.area === "admin" ? "/admin" : "/org");
   };
 
   return (
@@ -84,10 +86,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={loginMutation.isPending}
             className="rounded-full bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] disabled:opacity-50 dark:hover:bg-[#ccc]"
           >
-            {submitting ? "Memproses…" : "Masuk"}
+            {loginMutation.isPending ? "Memproses…" : "Masuk"}
           </button>
         </form>
 

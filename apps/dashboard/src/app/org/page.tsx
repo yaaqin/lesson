@@ -2,15 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { logout, useSession, type Session } from "@/lib/auth-store";
-import { useOrgContent } from "@/lib/org-content-store";
+import { useAuthStore, type Session } from "@/store/auth-store";
+import { useLogoutMutation } from "@/hooks/use-auth";
+import { useOrgContent } from "@/store/org-content-store";
 import { ORG_ROLE_LABEL } from "@/lib/dummy-accounts";
 
 export default function OrgDashboardPage() {
   const router = useRouter();
-  const session = useSession();
+  const session = useAuthStore((s) => s.session);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
 
   useEffect(() => {
+    if (!hasHydrated) return; // tunggu localStorage kebaca dulu, jangan buru-buru redirect
     if (session === null) {
       router.replace("/login");
       return;
@@ -18,9 +21,9 @@ export default function OrgDashboardPage() {
     if (session.area !== "org") {
       router.replace("/admin");
     }
-  }, [session, router]);
+  }, [hasHydrated, session, router]);
 
-  if (!session || session.area !== "org") {
+  if (!hasHydrated || !session || session.area !== "org") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
         <p className="text-zinc-500 dark:text-zinc-500">Memuat…</p>
@@ -35,6 +38,7 @@ type OrgSession = Extract<Session, { area: "org" }>;
 
 function OrgDashboard({ session }: { session: OrgSession }) {
   const router = useRouter();
+  const logoutMutation = useLogoutMutation();
   const { kelasList, addKelas, addGroup, addChallenge } = useOrgContent(session.organizationId);
 
   const [newKelasName, setNewKelasName] = useState("");
@@ -88,8 +92,8 @@ function OrgDashboard({ session }: { session: OrgSession }) {
         </div>
         <button
           type="button"
-          onClick={() => {
-            logout();
+          onClick={async () => {
+            await logoutMutation.mutateAsync();
             router.push("/login");
           }}
           className="rounded-full border border-black/[.08] px-4 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-[#1a1a1a]"

@@ -2,20 +2,24 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { logout, useSession } from "@/lib/auth-store";
+import { useAuthStore } from "@/store/auth-store";
+import { useLogoutMutation } from "@/hooks/use-auth";
 import {
   approveRegistration,
   rejectRegistration,
   useRegistrations,
-} from "@/lib/org-registrations-store";
+} from "@/store/org-registrations-store";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const session = useSession();
+  const session = useAuthStore((s) => s.session);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const registrations = useRegistrations();
+  const logoutMutation = useLogoutMutation();
 
   useEffect(() => {
+    if (!hasHydrated) return; // tunggu localStorage kebaca dulu, jangan buru-buru redirect
     if (session === null) {
       router.replace("/login");
       return;
@@ -23,9 +27,9 @@ export default function AdminDashboardPage() {
     if (session.area !== "admin") {
       router.replace("/org");
     }
-  }, [session, router]);
+  }, [hasHydrated, session, router]);
 
-  if (!session || session.area !== "admin") {
+  if (!hasHydrated || !session || session.area !== "admin") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
         <p className="text-zinc-500 dark:text-zinc-500">Memuat…</p>
@@ -49,8 +53,8 @@ export default function AdminDashboardPage() {
         </div>
         <button
           type="button"
-          onClick={() => {
-            logout();
+          onClick={async () => {
+            await logoutMutation.mutateAsync();
             router.push("/login");
           }}
           className="rounded-full border border-black/[.08] px-4 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-[#1a1a1a]"
