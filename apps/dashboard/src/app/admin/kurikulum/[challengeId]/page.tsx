@@ -219,20 +219,31 @@ function QuestionRow({
           {STATUS_LABEL[question.status] ?? question.status}
         </span>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {question.options.map((opt) => (
-          <span
-            key={opt.value}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              opt.isCorrect
-                ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400"
-                : "bg-black/[.06] text-zinc-600 dark:bg-white/[.08] dark:text-zinc-400"
-            }`}
-          >
-            {opt.value} {opt.isCorrect && "✓"}
+      {question.type === "essay_numeric" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+            ✏️ Essay
           </span>
-        ))}
-      </div>
+          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400">
+            Jawaban: {question.correctAnswerValue} ✓
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {question.options?.map((opt) => (
+            <span
+              key={opt.value}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                opt.isCorrect
+                  ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400"
+                  : "bg-black/[.06] text-zinc-600 dark:bg-white/[.08] dark:text-zinc-400"
+              }`}
+            >
+              {opt.value} {opt.isCorrect && "✓"}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex gap-3 text-sm">
         <button type="button" onClick={onEdit} className="font-medium text-blue-600 dark:text-blue-400">
           Edit
@@ -258,16 +269,22 @@ function QuestionForm({
   onSubmit: (input: QuestionInput) => void;
   onCancel: () => void;
 }) {
+  const [type, setType] = useState<"multiple_choice" | "essay_numeric">(
+    initial?.type ?? "multiple_choice",
+  );
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   const [status, setStatus] = useState<string>(initial?.status ?? "published");
   const [optionValues, setOptionValues] = useState<string[]>(() => {
-    const base = initial?.options.map((o) => String(o.value)) ?? [];
+    const base = initial?.options?.map((o) => String(o.value)) ?? [];
     return Array.from({ length: optionCount }, (_, i) => base[i] ?? "");
   });
   const [correctIndex, setCorrectIndex] = useState<number>(() => {
-    const idx = initial?.options.findIndex((o) => o.isCorrect) ?? -1;
+    const idx = initial?.options?.findIndex((o) => o.isCorrect) ?? -1;
     return idx >= 0 ? idx : 0;
   });
+  const [essayAnswer, setEssayAnswer] = useState(
+    initial?.correctAnswerValue !== undefined ? String(initial.correctAnswerValue) : "",
+  );
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = () => {
@@ -276,6 +293,17 @@ function QuestionForm({
       setLocalError("Prompt soal gak boleh kosong.");
       return;
     }
+
+    if (type === "essay_numeric") {
+      const value = Number(essayAnswer);
+      if (essayAnswer.trim() === "" || !Number.isFinite(value)) {
+        setLocalError("Jawaban benar harus diisi angka.");
+        return;
+      }
+      onSubmit({ type, prompt: prompt.trim(), status, options: [], correctAnswerValue: value });
+      return;
+    }
+
     const options: AdminQuestionOption[] = optionValues.map((raw, i) => ({
       value: Number(raw),
       isCorrect: i === correctIndex,
@@ -289,48 +317,73 @@ function QuestionForm({
       setLocalError("Nilai opsi jangan ada yang sama.");
       return;
     }
-    onSubmit({ prompt: prompt.trim(), status, options });
+    onSubmit({ type, prompt: prompt.trim(), status, options });
   };
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-blue-300 bg-white p-4 dark:border-blue-500/40 dark:bg-zinc-900">
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-zinc-700 dark:text-zinc-300">Tipe soal</span>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as "multiple_choice" | "essay_numeric")}
+          className="rounded-lg border border-black/[.08] bg-transparent px-3 py-2 text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
+        >
+          <option value="multiple_choice">Pilihan Ganda</option>
+          <option value="essay_numeric">Essay (isian angka)</option>
+        </select>
+      </label>
+
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium text-zinc-700 dark:text-zinc-300">Prompt soal</span>
         <input
           autoFocus
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="mis. 7 + 8"
+          placeholder={type === "essay_numeric" ? "mis. Sebuah kelas punya 8 baris kursi..." : "mis. 7 + 8"}
           className="rounded-lg border border-black/[.08] bg-transparent px-3 py-2 text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
         />
       </label>
 
-      <div className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">
-          Opsi jawaban (pilih yang benar)
-        </span>
-        <div className="flex flex-col gap-2">
-          {optionValues.map((value, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name={`correct-${initial?.id ?? "new"}`}
-                checked={correctIndex === i}
-                onChange={() => setCorrectIndex(i)}
-              />
-              <input
-                type="number"
-                value={value}
-                onChange={(e) =>
-                  setOptionValues((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
-                }
-                placeholder={`Opsi ${i + 1}`}
-                className="flex-1 rounded-lg border border-black/[.08] bg-transparent px-3 py-1.5 text-sm text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
-              />
-            </div>
-          ))}
+      {type === "essay_numeric" ? (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">Jawaban benar</span>
+          <input
+            type="number"
+            value={essayAnswer}
+            onChange={(e) => setEssayAnswer(e.target.value)}
+            placeholder="mis. 32"
+            className="rounded-lg border border-black/[.08] bg-transparent px-3 py-2 text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
+          />
+        </label>
+      ) : (
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+            Opsi jawaban (pilih yang benar)
+          </span>
+          <div className="flex flex-col gap-2">
+            {optionValues.map((value, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`correct-${initial?.id ?? "new"}`}
+                  checked={correctIndex === i}
+                  onChange={() => setCorrectIndex(i)}
+                />
+                <input
+                  type="number"
+                  value={value}
+                  onChange={(e) =>
+                    setOptionValues((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
+                  }
+                  placeholder={`Opsi ${i + 1}`}
+                  className="flex-1 rounded-lg border border-black/[.08] bg-transparent px-3 py-1.5 text-sm text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium text-zinc-700 dark:text-zinc-300">Status</span>

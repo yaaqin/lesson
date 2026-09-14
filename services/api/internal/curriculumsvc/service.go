@@ -66,7 +66,11 @@ func (s *Service) ListChallenges(ctx context.Context, batchID, userID string) ([
 			EXISTS(
 				SELECT 1 FROM challenge_attempts a
 				WHERE a.challenge_id = c.id AND a.user_id = $2 AND a.status = 'passed'
-			) AS completed
+			) AS completed,
+			EXISTS(
+				SELECT 1 FROM questions q
+				WHERE q.challenge_id = c.id AND q.status = 'published' AND q.question_type = 'essay_numeric'
+			) AS has_essay
 		FROM challenges c
 		WHERE c.batch_id = $1
 		ORDER BY c.order_index
@@ -81,7 +85,7 @@ func (s *Service) ListChallenges(ctx context.Context, batchID, userID string) ([
 		var c ChallengeListItem
 		if err := rows.Scan(
 			&c.ID, &c.Name, &c.IsExam, &c.QuestionCountRequired,
-			&c.PassThresholdPercent, &c.TimeLimitSeconds, &c.Completed,
+			&c.PassThresholdPercent, &c.TimeLimitSeconds, &c.Completed, &c.HasEssay,
 		); err != nil {
 			return nil, err
 		}

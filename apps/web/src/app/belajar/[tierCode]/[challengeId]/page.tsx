@@ -28,6 +28,7 @@ export default function ChallengePage() {
   const [game, setGame] = useState<StartResult | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -47,6 +48,7 @@ export default function ChallengePage() {
     setPhase("loading");
     setCurrentIndex(0);
     setAnswers({});
+    setEssayDrafts({});
     setSelected(null);
     setResult(null);
     startAttempt(params.challengeId, {
@@ -151,6 +153,22 @@ export default function ChallengePage() {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
+  // Mode ujian bebas bolak-balik antar soal, jadi draft ketikan essay per soal
+  // disimpen di sini (bukan state lokal komponen) biar gak ilang pas pindah soal.
+  const handleEssayDraftChange = (questionId: string, draft: string) => {
+    setEssayDrafts((prev) => ({ ...prev, [questionId]: draft }));
+    const parsed = Number(draft);
+    if (draft !== "" && draft !== "-" && Number.isFinite(parsed)) {
+      setAnswers((prev) => ({ ...prev, [questionId]: parsed }));
+    } else {
+      setAnswers((prev) => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
+    }
+  };
+
   const retry = () => {
     startedForRef.current = null;
     beginAttempt();
@@ -211,6 +229,8 @@ export default function ChallengePage() {
             currentIndex={currentIndex}
             setCurrentIndex={setCurrentIndex}
             answers={answers}
+            essayDrafts={essayDrafts}
+            onEssayChange={handleEssayDraftChange}
             timeLeft={timeLeft}
             onAnswer={handleAnswerExam}
             onFinish={() => submitWithAnswers(answers)}
@@ -219,6 +239,7 @@ export default function ChallengePage() {
 
         {phase === "playing" && !game.isExam && currentQuestion && (
           <RegularView
+            key={currentQuestion.id}
             game={game}
             currentIndex={currentIndex}
             currentQuestion={currentQuestion}
@@ -268,6 +289,24 @@ function RegularView({
   selected: number | null;
   onAnswer: (value: number) => void;
 }) {
+  const [essayValue, setEssayValue] = useState("");
+  const isEssay = currentQuestion.type === "essay_numeric";
+
+  const submitEssay = () => {
+    if (selected !== null || essayValue === "" || essayValue === "-") return;
+    const num = Number(essayValue);
+    if (!Number.isFinite(num)) return;
+    onAnswer(num);
+  };
+
+  const essayFeedback: "correct" | "incorrect" | null =
+    selected === null
+      ? null
+      : currentQuestion.correctAnswerValue !== undefined &&
+          Math.abs(selected - currentQuestion.correctAnswerValue) < 1e-9
+        ? "correct"
+        : "incorrect";
+
   return (
     <>
       <div className="flex flex-col gap-2">
@@ -293,34 +332,51 @@ function RegularView({
         >
           ⏱️ {timeLeft}s
         </span>
+        {isEssay && (
+          <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+            ✏️ Isian — ketik jawabannya
+          </span>
+        )}
         <h2 className="text-4xl font-semibold tracking-tight text-black dark:text-zinc-50">
           {currentQuestion.prompt}
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {currentQuestion.options.map((opt) => {
-          const isSelected = selected === opt.value;
-          const showCorrectness = selected !== null;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              disabled={selected !== null}
-              onClick={() => onAnswer(opt.value)}
-              className={`rounded-2xl border-2 px-4 py-5 text-xl font-semibold transition-colors ${
-                showCorrectness && opt.isCorrect
-                  ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400"
-                  : showCorrectness && isSelected
-                    ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400"
-                    : "border-black/[.08] bg-white text-black hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
-              }`}
-            >
-              {opt.value}
-            </button>
-          );
-        })}
-      </div>
+      {isEssay ? (
+        <div className="flex justify-center">
+          <NumericKeypad
+            value={selected !== null ? String(selected) : essayValue}
+            onChange={setEssayValue}
+            onSubmit={submitEssay}
+            disabled={selected !== null}
+            feedback={essayFeedback}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {(currentQuestion.options ?? []).map((opt) => {
+            const isSelected = selected === opt.value;
+            const showCorrectness = selected !== null;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={selected !== null}
+                onClick={() => onAnswer(opt.value)}
+                className={`rounded-2xl border-2 px-4 py-5 text-xl font-semibold transition-colors ${
+                  showCorrectness && opt.isCorrect
+                    ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400"
+                    : showCorrectness && isSelected
+                      ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400"
+                      : "border-black/[.08] bg-white text-black hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
+                }`}
+              >
+                {opt.value}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
@@ -330,6 +386,8 @@ function ExamView({
   currentIndex,
   setCurrentIndex,
   answers,
+  essayDrafts,
+  onEssayChange,
   timeLeft,
   onAnswer,
   onFinish,
@@ -338,11 +396,14 @@ function ExamView({
   currentIndex: number;
   setCurrentIndex: (fn: (i: number) => number) => void;
   answers: Record<string, number>;
+  essayDrafts: Record<string, string>;
+  onEssayChange: (questionId: string, draft: string) => void;
   timeLeft: number;
   onAnswer: (questionId: string, value: number) => void;
   onFinish: () => void;
 }) {
   const q = game.questions[currentIndex];
+  const isEssay = q.type === "essay_numeric";
   const answeredCount = Object.keys(answers).length;
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
@@ -391,30 +452,41 @@ function ExamView({
         <span className="text-sm text-zinc-500 dark:text-zinc-500">
           Soal {currentIndex + 1} / {game.questions.length}
         </span>
+        {isEssay && (
+          <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+            ✏️ Isian — ketik jawabannya
+          </span>
+        )}
         <h2 className="text-4xl font-semibold tracking-tight text-black dark:text-zinc-50">
           {q.prompt}
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {q.options.map((opt) => {
-          const isSelected = answers[q.id] === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onAnswer(q.id, opt.value)}
-              className={`rounded-2xl border-2 px-4 py-5 text-xl font-semibold transition-colors ${
-                isSelected
-                  ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400"
-                  : "border-black/[.08] bg-white text-black hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
-              }`}
-            >
-              {opt.value}
-            </button>
-          );
-        })}
-      </div>
+      {isEssay ? (
+        <div className="flex justify-center">
+          <NumericKeypad value={essayDrafts[q.id] ?? ""} onChange={(v) => onEssayChange(q.id, v)} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {(q.options ?? []).map((opt) => {
+            const isSelected = answers[q.id] === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onAnswer(q.id, opt.value)}
+                className={`rounded-2xl border-2 px-4 py-5 text-xl font-semibold transition-colors ${
+                  isSelected
+                    ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400"
+                    : "border-black/[.08] bg-white text-black hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
+                }`}
+              >
+                {opt.value}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <button
@@ -535,11 +607,14 @@ function ResultView({
       <ol className="flex w-full flex-col gap-2 text-left text-sm">
         {questions.map((q, idx) => {
           const selectedValue = answers[q.id];
-          const correctOption = q.options.find((o) => o.isCorrect);
+          const correctValue =
+            q.type === "essay_numeric"
+              ? q.correctAnswerValue
+              : q.options?.find((o) => o.isCorrect)?.value;
           const isCorrect =
             selectedValue !== undefined &&
-            correctOption !== undefined &&
-            Math.abs(selectedValue - correctOption.value) < 1e-9;
+            correctValue !== undefined &&
+            Math.abs(selectedValue - correctValue) < 1e-9;
           return (
             <li
               key={q.id}
@@ -568,5 +643,85 @@ function LivesBadge({ lives }: { lives: number }) {
         </span>
       ))}
     </span>
+  );
+}
+
+const KEYPAD_KEYS = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "-", "0", "."];
+
+// Keypad angka on-screen buat soal essay_numeric -- sengaja bukan <input type="number">
+// biar konsisten di semua device (gak gantung keyboard native OS) & gampang dikunci
+// (disabled) begitu jawaban udah disubmit, kayak tombol opsi pilihan ganda.
+function NumericKeypad({
+  value,
+  onChange,
+  onSubmit,
+  disabled,
+  feedback,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit?: () => void;
+  disabled?: boolean;
+  feedback?: "correct" | "incorrect" | null;
+}) {
+  const press = (key: string) => {
+    if (disabled) return;
+    if (key === "-") {
+      onChange(value.startsWith("-") ? value.slice(1) : "-" + value);
+      return;
+    }
+    if (key === "." && value.includes(".")) return;
+    onChange(value + key);
+  };
+
+  return (
+    <div className="flex w-full max-w-xs flex-col gap-3">
+      <div
+        className={`flex h-16 items-center justify-center rounded-2xl border-2 text-3xl font-semibold transition-colors ${
+          feedback === "correct"
+            ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400"
+            : feedback === "incorrect"
+              ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400"
+              : "border-black/[.08] bg-white text-black dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
+        }`}
+      >
+        {value || <span className="text-zinc-300 dark:text-zinc-700">0</span>}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {KEYPAD_KEYS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            disabled={disabled}
+            onClick={() => press(key)}
+            className="rounded-xl border border-black/[.08] bg-white py-4 text-xl font-semibold text-black transition-colors hover:border-blue-400 disabled:opacity-40 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
+          >
+            {key}
+          </button>
+        ))}
+      </div>
+
+      <div className={onSubmit ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(value.slice(0, -1))}
+          className="rounded-xl border border-black/[.08] py-3 text-sm font-medium text-zinc-600 disabled:opacity-40 dark:border-white/[.145] dark:text-zinc-400"
+        >
+          ⌫ Hapus
+        </button>
+        {onSubmit && (
+          <button
+            type="button"
+            disabled={disabled || value === "" || value === "-"}
+            onClick={onSubmit}
+            className="rounded-xl bg-foreground py-3 text-sm font-semibold text-background disabled:opacity-40"
+          >
+            Jawab
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

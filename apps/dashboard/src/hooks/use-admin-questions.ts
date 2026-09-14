@@ -1,19 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { privateApi } from "@/lib/http";
 
+export type QuestionType = "multiple_choice" | "essay_numeric";
 export type AdminQuestionOption = { value: number; isCorrect: boolean };
 
 export type AdminQuestion = {
   id: string;
+  type: QuestionType;
   prompt: string;
   status: "draft" | "published" | "archived";
-  options: AdminQuestionOption[];
+  options?: AdminQuestionOption[];
+  correctAnswerValue?: number;
 };
 
 export type QuestionInput = {
+  type: QuestionType;
   prompt: string;
   status: string;
   options: AdminQuestionOption[];
+  correctAnswerValue?: number;
 };
 
 export function useAdminQuestionsQuery(challengeId: string) {

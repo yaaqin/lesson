@@ -6,17 +6,19 @@ import (
 )
 
 var (
-	ErrTooFewOptions   = errors.New("minimal 2 opsi jawaban")
-	ErrNoCorrectOption = errors.New("harus ada 1 opsi yang ditandai benar")
-	ErrMultipleCorrect = errors.New("cuma boleh 1 opsi yang ditandai benar")
-	ErrDuplicateOption = errors.New("nilai opsi jangan ada yang sama")
+	ErrTooFewOptions        = errors.New("minimal 2 opsi jawaban")
+	ErrNoCorrectOption      = errors.New("harus ada 1 opsi yang ditandai benar")
+	ErrMultipleCorrect      = errors.New("cuma boleh 1 opsi yang ditandai benar")
+	ErrDuplicateOption      = errors.New("nilai opsi jangan ada yang sama")
+	ErrMissingCorrectAnswer = errors.New("jawaban benar wajib diisi buat soal essay")
+	ErrInvalidQuestionType  = errors.New("tipe soal gak dikenal")
 )
 
 // AdminListQuestions: semua soal 1 challenge (termasuk draft/archived, beda
 // dengan loadPublishedBank di gameplay.go yang cuma ambil status published).
 func (s *Service) AdminListQuestions(ctx context.Context, challengeID string) ([]AdminQuestion, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT q.id, q.prompt, q.status, qo.option_value, qo.is_correct
+		SELECT q.id, q.question_type, q.prompt, q.status, q.correct_answer_value, qo.option_value, qo.is_correct
 		FROM questions q
 		LEFT JOIN question_options qo ON qo.question_id = q.id
 		WHERE q.challenge_id = $1
@@ -31,16 +33,22 @@ func (s *Service) AdminListQuestions(ctx context.Context, challengeID string) ([
 	order := []string{}
 	for rows.Next() {
 		var (
-			id, prompt, status string
-			optValue           *float64
-			isCorrect          *bool
+			id, qType, prompt, status string
+			correctAnswer             float64
+			optValue                  *float64
+			isCorrect                 *bool
 		)
-		if err := rows.Scan(&id, &prompt, &status, &optValue, &isCorrect); err != nil {
+		if err := rows.Scan(&id, &qType, &prompt, &status, &correctAnswer, &optValue, &isCorrect); err != nil {
 			return nil, err
 		}
 		q, ok := byID[id]
 		if !ok {
-			q = &AdminQuestion{ID: id, Prompt: prompt, Status: status, Options: []AdminQuestionOption{}}
+			q = &AdminQuestion{ID: id, Type: qType, Prompt: prompt, Status: status}
+			if qType == QuestionTypeEssayNumeric {
+				q.CorrectAnswerValue = &correctAnswer
+			} else {
+				q.Options = []AdminQuestionOption{}
+			}
 			byID[id] = q
 			order = append(order, id)
 		}
@@ -84,8 +92,28 @@ func validateOptions(options []AdminQuestionOption) (float64, error) {
 	return *correct, nil
 }
 
-func (s *Service) AdminCreateQuestion(ctx context.Context, challengeID, prompt, status string, options []AdminQuestionOption) (string, error) {
-	correctValue, err := validateOptions(options)
+// resolveCorrectAnswer: buat multiple_choice, jawaban benar diturunkan dari
+// options[].isCorrect. Buat essay_numeric, gak ada options sama sekali --
+// jawaban benar diinput langsung lewat correctAnswerValue.
+func resolveCorrectAnswer(questionType string, options []AdminQuestionOption, correctAnswerValue *float64) (float64, error) {
+	switch questionType {
+	case QuestionTypeEssayNumeric:
+		if correctAnswerValue == nil {
+			return 0, ErrMissingCorrectAnswer
+		}
+		return *correctAnswerValue, nil
+	case QuestionTypeMultipleChoice:
+		return validateOptions(options)
+	default:
+		return 0, ErrInvalidQuestionType
+	}
+}
+
+func (s *Service) AdminCreateQuestion(
+	ctx context.Context, challengeID, questionType, prompt, status string,
+	options []AdminQuestionOption, correctAnswerValue *float64,
+) (string, error) {
+	correctValue, err := resolveCorrectAnswer(questionType, options, correctAnswerValue)
 	if err != nil {
 		return "", err
 	}
@@ -93,34 +121,42 @@ func (s *Service) AdminCreateQuestion(ctx context.Context, challengeID, prompt, 
 	var questionID string
 	if err := s.db.QueryRow(ctx, `
 		INSERT INTO questions (challenge_id, question_type, prompt, correct_answer_value, status)
-		VALUES ($1, 'multiple_choice', $2, $3, $4)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
-	`, challengeID, prompt, correctValue, status).Scan(&questionID); err != nil {
+	`, challengeID, questionType, prompt, correctValue, status).Scan(&questionID); err != nil {
 		return "", err
 	}
 
-	if err := s.insertOptions(ctx, questionID, options); err != nil {
-		return "", err
+	if questionType == QuestionTypeMultipleChoice {
+		if err := s.insertOptions(ctx, questionID, options); err != nil {
+			return "", err
+		}
 	}
 	return questionID, nil
 }
 
-func (s *Service) AdminUpdateQuestion(ctx context.Context, questionID, prompt, status string, options []AdminQuestionOption) error {
-	correctValue, err := validateOptions(options)
+func (s *Service) AdminUpdateQuestion(
+	ctx context.Context, questionID, questionType, prompt, status string,
+	options []AdminQuestionOption, correctAnswerValue *float64,
+) error {
+	correctValue, err := resolveCorrectAnswer(questionType, options, correctAnswerValue)
 	if err != nil {
 		return err
 	}
 
 	if _, err := s.db.Exec(ctx, `
-		UPDATE questions SET prompt = $1, correct_answer_value = $2, status = $3 WHERE id = $4
-	`, prompt, correctValue, status, questionID); err != nil {
+		UPDATE questions SET question_type = $1, prompt = $2, correct_answer_value = $3, status = $4 WHERE id = $5
+	`, questionType, prompt, correctValue, status, questionID); err != nil {
 		return err
 	}
 
 	if _, err := s.db.Exec(ctx, `DELETE FROM question_options WHERE question_id = $1`, questionID); err != nil {
 		return err
 	}
-	return s.insertOptions(ctx, questionID, options)
+	if questionType == QuestionTypeMultipleChoice {
+		return s.insertOptions(ctx, questionID, options)
+	}
+	return nil
 }
 
 func (s *Service) insertOptions(ctx context.Context, questionID string, options []AdminQuestionOption) error {

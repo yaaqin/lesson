@@ -101,9 +101,18 @@ type questionOptionRequest struct {
 }
 
 type upsertQuestionRequest struct {
-	Prompt  string                  `json:"prompt"`
-	Status  string                  `json:"status"`
-	Options []questionOptionRequest `json:"options"`
+	Type               string                  `json:"type"`
+	Prompt             string                  `json:"prompt"`
+	Status             string                  `json:"status"`
+	Options            []questionOptionRequest `json:"options"`
+	CorrectAnswerValue *float64                `json:"correctAnswerValue"`
+}
+
+func normalizeQuestionType(t string) string {
+	if t == curriculumsvc.QuestionTypeEssayNumeric {
+		return curriculumsvc.QuestionTypeEssayNumeric
+	}
+	return curriculumsvc.QuestionTypeMultipleChoice
 }
 
 func toAdminOptions(input []questionOptionRequest) []curriculumsvc.AdminQuestionOption {
@@ -137,7 +146,8 @@ func (s *Server) handleAdminCreateQuestion(w http.ResponseWriter, r *http.Reques
 
 	challengeID := r.PathValue("id")
 	id, err := s.curriculum.AdminCreateQuestion(
-		r.Context(), challengeID, req.Prompt, normalizeStatus(req.Status), toAdminOptions(req.Options),
+		r.Context(), challengeID, normalizeQuestionType(req.Type), req.Prompt, normalizeStatus(req.Status),
+		toAdminOptions(req.Options), req.CorrectAnswerValue,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "validation_error", "message": err.Error()})
@@ -160,7 +170,8 @@ func (s *Server) handleAdminUpdateQuestion(w http.ResponseWriter, r *http.Reques
 
 	questionID := r.PathValue("id")
 	if err := s.curriculum.AdminUpdateQuestion(
-		r.Context(), questionID, req.Prompt, normalizeStatus(req.Status), toAdminOptions(req.Options),
+		r.Context(), questionID, normalizeQuestionType(req.Type), req.Prompt, normalizeStatus(req.Status),
+		toAdminOptions(req.Options), req.CorrectAnswerValue,
 	); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "validation_error", "message": err.Error()})
 		return

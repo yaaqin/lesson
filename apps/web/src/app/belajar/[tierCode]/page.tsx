@@ -80,8 +80,13 @@ export default function TierBatchPage() {
                 {challenge.isExam ? "🏁" : index + 1}
               </span>
               <div className="flex flex-1 flex-col">
-                <span className="font-semibold text-black dark:text-zinc-50">
+                <span className="flex items-center gap-2 font-semibold text-black dark:text-zinc-50">
                   {challenge.name}
+                  {challenge.hasEssay && (
+                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+                      ✏️ Ada Essay
+                    </span>
+                  )}
                 </span>
                 <span className="text-xs text-zinc-500 dark:text-zinc-500">
                   {challenge.questionCountRequired} soal · lulus minimal{" "}

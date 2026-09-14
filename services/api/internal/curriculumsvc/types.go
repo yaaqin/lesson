@@ -21,28 +21,42 @@ type ChallengeListItem struct {
 	PassThresholdPercent  int    `json:"passThresholdPercent"`
 	TimeLimitSeconds      int    `json:"timeLimitSeconds"`
 	Completed             bool   `json:"completed"`
+	HasEssay              bool   `json:"hasEssay"`
 }
 
 // --- Gameplay ---
+
+const (
+	QuestionTypeMultipleChoice = "multiple_choice"
+	QuestionTypeEssayNumeric   = "essay_numeric"
+)
 
 type QuestionOption struct {
 	Value     float64 `json:"value"`
 	IsCorrect bool    `json:"isCorrect"`
 }
 
+// SessionQuestion: buat multiple_choice, Options keisi & CorrectAnswerValue
+// nil. Buat essay_numeric, Options kosong & CorrectAnswerValue keisi -- klien
+// yang nampilin keypad angka & ngecek sendiri kebenarannya (simplifikasi yang
+// sama kayak MC yang juga nampilin options[].isCorrect ke klien).
 type SessionQuestion struct {
-	ID      string           `json:"id"`
-	Prompt  string           `json:"prompt"`
-	Options []QuestionOption `json:"options"`
+	ID                 string           `json:"id"`
+	Type               string           `json:"type"`
+	Prompt             string           `json:"prompt"`
+	Options            []QuestionOption `json:"options,omitempty"`
+	CorrectAnswerValue *float64         `json:"correctAnswerValue,omitempty"`
 }
 
 // snapshotQuestion sama isinya dengan SessionQuestion, dipisah tipe biar
 // perubahan format JSON respons API gak otomatis mengubah format snapshot
 // yang sudah tersimpan di kolom questions_snapshot milik attempt lama.
 type snapshotQuestion struct {
-	ID      string           `json:"id"`
-	Prompt  string           `json:"prompt"`
-	Options []QuestionOption `json:"options"`
+	ID                 string           `json:"id"`
+	Type               string           `json:"type"`
+	Prompt             string           `json:"prompt"`
+	Options            []QuestionOption `json:"options,omitempty"`
+	CorrectAnswerValue *float64         `json:"correctAnswerValue,omitempty"`
 }
 
 type StartResult struct {
@@ -110,8 +124,10 @@ type AdminQuestionOption struct {
 }
 
 type AdminQuestion struct {
-	ID      string                `json:"id"`
-	Prompt  string                `json:"prompt"`
-	Status  string                `json:"status"`
-	Options []AdminQuestionOption `json:"options"`
+	ID                 string                `json:"id"`
+	Type               string                `json:"type"`
+	Prompt             string                `json:"prompt"`
+	Status             string                `json:"status"`
+	Options            []AdminQuestionOption `json:"options,omitempty"`
+	CorrectAnswerValue *float64              `json:"correctAnswerValue,omitempty"`
 }

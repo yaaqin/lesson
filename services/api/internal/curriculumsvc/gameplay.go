@@ -12,9 +12,11 @@ import (
 )
 
 type bankQuestion struct {
-	ID      string
-	Prompt  string
-	Options []QuestionOption
+	ID                 string
+	Type               string
+	Prompt             string
+	Options            []QuestionOption
+	CorrectAnswerValue float64
 }
 
 // StartChallenge = "gacha fetch": pastiin nyawa cukup, ambil seluruh bank soal
@@ -63,11 +65,18 @@ func (s *Service) StartChallenge(ctx context.Context, userID, challengeID string
 	snapshot := make([]snapshotQuestion, len(picked))
 	questions := make([]SessionQuestion, len(picked))
 	for i, q := range picked {
+		if q.Type == QuestionTypeEssayNumeric {
+			correct := q.CorrectAnswerValue
+			snapshot[i] = snapshotQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, CorrectAnswerValue: &correct}
+			questions[i] = SessionQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, CorrectAnswerValue: &correct}
+			continue
+		}
+
 		opts := append([]QuestionOption{}, q.Options...)
 		rand.Shuffle(len(opts), func(a, b int) { opts[a], opts[b] = opts[b], opts[a] })
 
-		snapshot[i] = snapshotQuestion{ID: q.ID, Prompt: q.Prompt, Options: opts}
-		questions[i] = SessionQuestion{ID: q.ID, Prompt: q.Prompt, Options: opts}
+		snapshot[i] = snapshotQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Options: opts}
+		questions[i] = SessionQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Options: opts}
 	}
 
 	snapshotJSON, err := json.Marshal(snapshot)
@@ -95,11 +104,14 @@ func (s *Service) StartChallenge(ctx context.Context, userID, challengeID string
 	}, nil
 }
 
+// loadPublishedBank ambil semua soal published, MC maupun essay. LEFT JOIN
+// (bukan INNER) karena soal essay_numeric gak punya baris question_options
+// sama sekali -- INNER JOIN bakal diam-diam ngilangin soal essay dari bank.
 func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]bankQuestion, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT q.id, q.prompt, qo.option_value, qo.is_correct
+		SELECT q.id, q.question_type, q.prompt, q.correct_answer_value, qo.option_value, qo.is_correct
 		FROM questions q
-		JOIN question_options qo ON qo.question_id = q.id
+		LEFT JOIN question_options qo ON qo.question_id = q.id
 		WHERE q.challenge_id = $1 AND q.status = 'published'
 		ORDER BY q.id
 	`, challengeID)
@@ -112,21 +124,23 @@ func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]
 	order := []string{}
 	for rows.Next() {
 		var (
-			qID       string
-			prompt    string
-			optValue  float64
-			isCorrect bool
+			qID, qType, prompt string
+			correctAnswer      float64
+			optValue           *float64
+			isCorrect          *bool
 		)
-		if err := rows.Scan(&qID, &prompt, &optValue, &isCorrect); err != nil {
+		if err := rows.Scan(&qID, &qType, &prompt, &correctAnswer, &optValue, &isCorrect); err != nil {
 			return nil, err
 		}
 		q, ok := byID[qID]
 		if !ok {
-			q = &bankQuestion{ID: qID, Prompt: prompt}
+			q = &bankQuestion{ID: qID, Type: qType, Prompt: prompt, CorrectAnswerValue: correctAnswer}
 			byID[qID] = q
 			order = append(order, qID)
 		}
-		q.Options = append(q.Options, QuestionOption{Value: optValue, IsCorrect: isCorrect})
+		if optValue != nil && isCorrect != nil {
+			q.Options = append(q.Options, QuestionOption{Value: *optValue, IsCorrect: *isCorrect})
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -188,6 +202,12 @@ func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, a
 	for _, q := range snapshot {
 		selected, answered := selectedByQuestion[q.ID]
 		if !answered {
+			continue
+		}
+		if q.Type == QuestionTypeEssayNumeric {
+			if q.CorrectAnswerValue != nil && floatEquals(*q.CorrectAnswerValue, selected) {
+				correctCount++
+			}
 			continue
 		}
 		for _, opt := range q.Options {

@@ -12,10 +12,18 @@ export type ChallengeListItem = {
   passThresholdPercent: number;
   timeLimitSeconds: number;
   completed: boolean;
+  hasEssay: boolean;
 };
 
+export type QuestionType = "multiple_choice" | "essay_numeric";
 export type QuestionOption = { value: number; isCorrect: boolean };
-export type SessionQuestion = { id: string; prompt: string; options: QuestionOption[] };
+export type SessionQuestion = {
+  id: string;
+  type: QuestionType;
+  prompt: string;
+  options?: QuestionOption[];
+  correctAnswerValue?: number;
+};
 
 export type StartResult = {
   attemptId: string;
