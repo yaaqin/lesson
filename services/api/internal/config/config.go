@@ -7,22 +7,30 @@ import (
 )
 
 type Config struct {
-	Port            string
-	DatabaseURL     string
-	JWTSecret       string
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
-	AllowedOrigins  []string
+	Port               string
+	DatabaseURL        string
+	JWTSecret          string
+	AccessTokenTTL     time.Duration
+	RefreshTokenTTL    time.Duration
+	AllowedOrigins     []string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
+	WebAppURL          string
 }
 
 func Load() Config {
 	return Config{
-		Port:            getEnv("PORT", "9801"),
-		DatabaseURL:     getEnv("DATABASE_URL", "postgres://lesson:lesson@localhost:9800/lesson?sslmode=disable"),
-		JWTSecret:       getEnv("JWT_SECRET", "dev-secret-change-me"),
-		AccessTokenTTL:  getEnvDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
-		RefreshTokenTTL: getEnvDuration("REFRESH_TOKEN_TTL", 7*24*time.Hour),
-		AllowedOrigins:  getEnvList("ALLOWED_ORIGINS", []string{"http://localhost:9802", "http://localhost:9803"}),
+		Port:               getEnv("PORT", "9801"),
+		DatabaseURL:        getEnv("DATABASE_URL", "postgres://lesson:lesson@localhost:9800/lesson?sslmode=disable"),
+		JWTSecret:          getEnv("JWT_SECRET", "dev-secret-change-me"),
+		AccessTokenTTL:     getEnvDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
+		RefreshTokenTTL:    getEnvDuration("REFRESH_TOKEN_TTL", 7*24*time.Hour),
+		AllowedOrigins:     getEnvList("ALLOWED_ORIGINS", []string{"http://localhost:9802", "http://localhost:9803"}),
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:9801/api/v1/auth/google/callback"),
+		WebAppURL:          getEnv("WEB_APP_URL", "http://localhost:9803"),
 	}
 }
 

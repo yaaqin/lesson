@@ -27,19 +27,27 @@ type TokenPair struct {
 	User         User
 }
 
+type GoogleConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+}
+
 type Service struct {
 	db              *pgxpool.Pool
 	jwtSecret       string
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
+	google          GoogleConfig
 }
 
-func NewService(db *pgxpool.Pool, jwtSecret string, accessTokenTTL, refreshTokenTTL time.Duration) *Service {
+func NewService(db *pgxpool.Pool, jwtSecret string, accessTokenTTL, refreshTokenTTL time.Duration, google GoogleConfig) *Service {
 	return &Service{
 		db:              db,
 		jwtSecret:       jwtSecret,
 		accessTokenTTL:  accessTokenTTL,
 		refreshTokenTTL: refreshTokenTTL,
+		google:          google,
 	}
 }
 

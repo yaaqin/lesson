@@ -1,20 +1,26 @@
 package httpserver
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"lesson/api/internal/authsvc"
 )
+
+const googleStateCookieName = "google_oauth_state"
 
 // registerAuthRoutes: shared auth — dipakai userApp maupun dashboard
 // (satu sistem akun untuk end-user, org owner/admin/teacher, dan platform admin).
 func registerAuthRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("POST /auth/register", s.notImplemented)
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
-	mux.HandleFunc("GET /auth/google", s.notImplemented)
-	mux.HandleFunc("GET /auth/google/callback", s.notImplemented)
+	mux.HandleFunc("GET /auth/google", s.handleGoogleStart)
+	mux.HandleFunc("GET /auth/google/callback", s.handleGoogleCallback)
 	mux.HandleFunc("POST /auth/set-password", s.notImplemented)
 	mux.HandleFunc("POST /auth/refresh", s.handleRefresh)
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
@@ -73,6 +79,72 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, toTokenResponse(pair))
+}
+
+// handleGoogleStart: redirect browser ke consent screen Google. state disimpen
+// di cookie HttpOnly sebentar (10 menit) buat dicocokkan lagi di callback -- ini
+// proteksi CSRF standar OAuth, bukan token asli.
+func (s *Server) handleGoogleStart(w http.ResponseWriter, r *http.Request) {
+	state, err := generateRandomState()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     googleStateCookieName,
+		Value:    state,
+		Path:     "/",
+		MaxAge:   600,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.Redirect(w, r, s.auth.GoogleAuthURL(state), http.StatusFound)
+}
+
+// handleGoogleCallback: Google redirect balik ke sini bawa ?code=&state=.
+// Setelah user & token kita sendiri kelar diproses, redirect browser ke
+// userApp bawa access+refresh token di URL FRAGMENT (bukan query string) --
+// fragment gak pernah dikirim ke server/Referer, jadi lebih aman buat lewatin
+// token walau cuma sebentar sebelum kesimpen ke Zustand di frontend.
+func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(googleStateCookieName)
+	if err != nil || r.URL.Query().Get("state") == "" || r.URL.Query().Get("state") != cookie.Value {
+		http.Redirect(w, r, s.webAppURL+"/login?error=google_state", http.StatusFound)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: googleStateCookieName, Value: "", Path: "/", MaxAge: -1,
+	})
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Redirect(w, r, s.webAppURL+"/login?error=google_missing_code", http.StatusFound)
+		return
+	}
+
+	pair, err := s.auth.LoginWithGoogleCode(r.Context(), code)
+	if err != nil {
+		http.Redirect(w, r, s.webAppURL+"/login?error=google_failed", http.StatusFound)
+		return
+	}
+
+	redirectURL := fmt.Sprintf(
+		"%s/auth/google/callback#accessToken=%s&refreshToken=%s",
+		s.webAppURL,
+		url.QueryEscape(pair.AccessToken),
+		url.QueryEscape(pair.RefreshToken),
+	)
+	http.Redirect(w, r, redirectURL, http.StatusFound)
+}
+
+func generateRandomState() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {

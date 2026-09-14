@@ -17,15 +17,23 @@ type Server struct {
 	curriculum     *curriculumsvc.Service
 	mux            *http.ServeMux
 	allowedOrigins map[string]struct{}
+	webAppURL      string
 }
 
-func New(db *pgxpool.Pool, auth *authsvc.Service, curriculum *curriculumsvc.Service, allowedOrigins []string) *Server {
+func New(db *pgxpool.Pool, auth *authsvc.Service, curriculum *curriculumsvc.Service, allowedOrigins []string, webAppURL string) *Server {
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		originSet[o] = struct{}{}
 	}
 
-	s := &Server{db: db, auth: auth, curriculum: curriculum, mux: http.NewServeMux(), allowedOrigins: originSet}
+	s := &Server{
+		db:             db,
+		auth:           auth,
+		curriculum:     curriculum,
+		mux:            http.NewServeMux(),
+		allowedOrigins: originSet,
+		webAppURL:      webAppURL,
+	}
 	s.routes()
 	return s
 }

@@ -22,9 +22,13 @@ func main() {
 	}
 	defer db.Close()
 
-	auth := authsvc.NewService(db, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	auth := authsvc.NewService(db, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL, authsvc.GoogleConfig{
+		ClientID:     cfg.GoogleClientID,
+		ClientSecret: cfg.GoogleClientSecret,
+		RedirectURL:  cfg.GoogleRedirectURL,
+	})
 	curriculum := curriculumsvc.NewService(db)
-	srv := httpserver.New(db, auth, curriculum, cfg.AllowedOrigins)
+	srv := httpserver.New(db, auth, curriculum, cfg.AllowedOrigins, cfg.WebAppURL)
 
 	log.Printf("api listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, srv.Handler()); err != nil {
