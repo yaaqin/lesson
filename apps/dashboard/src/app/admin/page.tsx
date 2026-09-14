@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
@@ -148,12 +149,22 @@ export default function AdminDashboardPage() {
           </section>
         )}
 
+        <Link
+          href="/admin/kurikulum"
+          className="flex flex-col gap-1 rounded-2xl border border-black/[.08] bg-white p-5 transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
+        >
+          <span className="font-semibold text-black dark:text-zinc-50">
+            Kurikulum & Waktu Challenge →
+          </span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-500">
+            Lihat tier/batch/challenge SD, SMP, SMK/SMA dan atur waktu per soal (challenge biasa)
+            atau waktu total (ujian).
+          </span>
+        </Link>
+
         <section className="flex flex-col gap-3 rounded-2xl border border-dashed border-black/[.08] p-5 text-sm text-zinc-500 dark:border-white/[.145] dark:text-zinc-500">
           <span className="font-medium text-zinc-600 dark:text-zinc-400">Segera hadir</span>
-          <span>
-            Kelola tier, bank soal global, dan statistik platform (FSD.md bagian 5 — Admin
-            Platform).
-          </span>
+          <span>Bank soal global, tambah tier baru, dan statistik platform.</span>
         </section>
       </main>
     </div>

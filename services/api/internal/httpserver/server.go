@@ -8,22 +8,24 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"lesson/api/internal/authsvc"
+	"lesson/api/internal/curriculumsvc"
 )
 
 type Server struct {
 	db             *pgxpool.Pool
 	auth           *authsvc.Service
+	curriculum     *curriculumsvc.Service
 	mux            *http.ServeMux
 	allowedOrigins map[string]struct{}
 }
 
-func New(db *pgxpool.Pool, auth *authsvc.Service, allowedOrigins []string) *Server {
+func New(db *pgxpool.Pool, auth *authsvc.Service, curriculum *curriculumsvc.Service, allowedOrigins []string) *Server {
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		originSet[o] = struct{}{}
 	}
 
-	s := &Server{db: db, auth: auth, mux: http.NewServeMux(), allowedOrigins: originSet}
+	s := &Server{db: db, auth: auth, curriculum: curriculum, mux: http.NewServeMux(), allowedOrigins: originSet}
 	s.routes()
 	return s
 }

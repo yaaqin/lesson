@@ -1,20 +1,25 @@
 package httpserver
 
-import "net/http"
+import (
+	"errors"
+	"net/http"
+
+	"lesson/api/internal/curriculumsvc"
+)
 
 // registerAppRoutes: dipakai apps/web (userApp / end-user).
 // Kurikulum, gameplay platform, sisi murid dari ujian organisasi, dan profil user sendiri.
 func registerAppRoutes(mux *http.ServeMux, s *Server) {
 	// Curriculum (read-only)
-	mux.HandleFunc("GET /app/tiers", s.notImplemented)
-	mux.HandleFunc("GET /app/tiers/{tierId}/batches", s.notImplemented)
+	mux.HandleFunc("GET /app/tiers", s.handleListTiers)
+	mux.HandleFunc("GET /app/tiers/{tierCode}/batches", s.handleListBatches)
 	mux.HandleFunc("GET /app/tiers/{tierId}/categories", s.notImplemented)
-	mux.HandleFunc("GET /app/batches/{batchId}/challenges", s.notImplemented)
+	mux.HandleFunc("GET /app/batches/{batchId}/challenges", s.handleListChallenges)
 	mux.HandleFunc("GET /app/challenges/{challengeId}", s.notImplemented)
 
 	// Gameplay (platform challenge)
-	mux.HandleFunc("POST /app/challenges/{challengeId}/start", s.notImplemented)
-	mux.HandleFunc("POST /app/attempts/{attemptId}/submit", s.notImplemented)
+	mux.HandleFunc("POST /app/challenges/{challengeId}/start", s.handleStartChallenge)
+	mux.HandleFunc("POST /app/attempts/{attemptId}/submit", s.handleSubmitAttempt)
 
 	// Ujian organisasi — sisi murid (pembuatan/pengelolaan ujian ada di routes_org.go)
 	mux.HandleFunc("POST /app/exams/{examId}/start", s.notImplemented)
@@ -25,10 +30,118 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("POST /app/invites/{token}/accept", s.notImplemented)
 
 	// Me
-	mux.HandleFunc("GET /app/me", s.notImplemented)
+	mux.HandleFunc("GET /app/me", s.handleMe)
 	mux.HandleFunc("GET /app/me/progress", s.notImplemented)
 	mux.HandleFunc("GET /app/me/lives", s.notImplemented)
 	mux.HandleFunc("GET /app/me/organizations", s.notImplemented)
 	mux.HandleFunc("POST /app/me/lives/reset", s.notImplemented)
 	mux.HandleFunc("PATCH /app/me/preferences", s.notImplemented)
+}
+
+func (s *Server) handleListTiers(w http.ResponseWriter, r *http.Request) {
+	tiers, err := s.curriculum.ListTiers(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, tiers)
+}
+
+func (s *Server) handleListBatches(w http.ResponseWriter, r *http.Request) {
+	tierCode := r.PathValue("tierCode")
+	batches, err := s.curriculum.ListBatchesByTierCode(r.Context(), tierCode)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, batches)
+}
+
+func (s *Server) handleListChallenges(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	batchID := r.PathValue("batchId")
+	challenges, err := s.curriculum.ListChallenges(r.Context(), batchID, claims.Subject)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, challenges)
+}
+
+func (s *Server) handleStartChallenge(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	challengeID := r.PathValue("challengeId")
+	result, err := s.curriculum.StartChallenge(r.Context(), claims.Subject, challengeID)
+	if err != nil {
+		switch {
+		case errors.Is(err, curriculumsvc.ErrNotFound):
+			writeError(w, http.StatusNotFound, "challenge_not_found")
+		case errors.Is(err, curriculumsvc.ErrNoLives):
+			writeError(w, http.StatusForbidden, "no_lives")
+		case errors.Is(err, curriculumsvc.ErrNotEnoughBank):
+			writeError(w, http.StatusConflict, "not_enough_questions")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+type submitAttemptRequest struct {
+	Answers []curriculumsvc.SubmitAnswer `json:"answers"`
+}
+
+func (s *Server) handleSubmitAttempt(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req submitAttemptRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	attemptID := r.PathValue("attemptId")
+	result, err := s.curriculum.SubmitAttempt(r.Context(), claims.Subject, attemptID, req.Answers)
+	if err != nil {
+		switch {
+		case errors.Is(err, curriculumsvc.ErrAttemptNotFound):
+			writeError(w, http.StatusNotFound, "attempt_not_found")
+		case errors.Is(err, curriculumsvc.ErrAttemptFinished):
+			writeError(w, http.StatusConflict, "attempt_already_submitted")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	me, err := s.curriculum.GetMe(r.Context(), claims.Subject)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, me)
 }

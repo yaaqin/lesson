@@ -124,3 +124,18 @@ func (s *Server) authenticate(r *http.Request) (*authsvc.AccessClaims, bool) {
 	}
 	return claims, true
 }
+
+// authenticateRole sama seperti authenticate, tapi sekalian mastiin role di
+// access token termasuk salah satu dari allowedRoles.
+func (s *Server) authenticateRole(r *http.Request, allowedRoles ...string) (*authsvc.AccessClaims, bool) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		return nil, false
+	}
+	for _, role := range allowedRoles {
+		if claims.Role == role {
+			return claims, true
+		}
+	}
+	return nil, false
+}

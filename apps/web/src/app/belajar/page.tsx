@@ -1,85 +1,83 @@
 "use client";
 
 import Link from "next/link";
-import { batch } from "@/lib/dummy-data";
-import { usePlayerState } from "@/lib/player-state";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useAuthStore } from "@/store/auth-store";
+import { useLogoutMutation } from "@/hooks/use-auth";
+import { useTiersQuery } from "@/hooks/use-curriculum";
 
-export default function BelajarPage() {
-  const { lives, streak, completedChallengeIds } = usePlayerState();
+const TIER_ICON: Record<string, string> = {
+  sd: "➕",
+  smp: "📐",
+  smk: "📊",
+};
+
+export default function TierPickerPage() {
+  const router = useRouter();
+  const session = useAuthStore((s) => s.session);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const logoutMutation = useLogoutMutation();
+  const tiersQuery = useTiersQuery();
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    if (session === null) {
+      router.replace("/login");
+    }
+  }, [hasHydrated, session, router]);
+
+  if (!hasHydrated || !session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
+        <p className="text-zinc-500 dark:text-zinc-500">Memuat…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link
-          href="/"
-          className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50"
-        >
+        <Link href="/" className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50">
           MathQuest
         </Link>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="flex items-center gap-1">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <span
-                key={i}
-                className={i < lives ? "text-red-500" : "text-zinc-300 dark:text-zinc-700"}
-              >
-                ❤️
-              </span>
-            ))}
-          </span>
-          <span className="flex items-center gap-1 font-medium text-orange-500">
-            🔥 {streak}
-          </span>
-        </div>
+        <button
+          type="button"
+          onClick={async () => {
+            await logoutMutation.mutateAsync();
+            router.push("/login");
+          }}
+          className="rounded-full border border-black/[.08] px-4 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-[#1a1a1a]"
+        >
+          Keluar
+        </button>
       </header>
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-8">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-6 py-8">
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-            {batch.tierName}
-          </span>
           <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            {batch.batchName}
+            Pilih Jenjang
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-500">
-            Data challenge di bawah ini masih dummy — belum tersambung ke
-            database.
+            Halo, {session.displayName}. Mau latihan yang mana hari ini?
           </p>
         </div>
 
-        <div className="flex flex-col gap-3">
-          {batch.challenges.map((challenge, index) => {
-            const completed = completedChallengeIds.includes(challenge.id);
-            return (
-              <Link
-                key={challenge.id}
-                href={`/belajar/${challenge.id}`}
-                className="flex items-center gap-4 rounded-2xl border border-black/[.08] bg-white px-5 py-4 transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white dark:bg-blue-500">
-                  {index + 1}
-                </span>
-                <div className="flex flex-1 flex-col">
-                  <span className="font-semibold text-black dark:text-zinc-50">
-                    {challenge.name}
-                  </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                    {challenge.questionCountRequired} soal · lulus minimal{" "}
-                    {challenge.passThresholdPercent}%
-                  </span>
-                </div>
-                {completed ? (
-                  <span className="shrink-0 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400">
-                    Selesai ✓
-                  </span>
-                ) : (
-                  <span className="shrink-0 text-sm font-medium text-blue-600 dark:text-blue-400">
-                    Mulai →
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+        {tiersQuery.isLoading && (
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">Memuat jenjang…</p>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {tiersQuery.data?.map((tier) => (
+            <Link
+              key={tier.id}
+              href={`/belajar/${tier.code}`}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-black/[.08] bg-white px-4 py-8 text-center transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
+            >
+              <span className="text-3xl">{TIER_ICON[tier.code] ?? "🔢"}</span>
+              <span className="font-semibold text-black dark:text-zinc-50">{tier.name}</span>
+            </Link>
+          ))}
         </div>
       </main>
     </div>
