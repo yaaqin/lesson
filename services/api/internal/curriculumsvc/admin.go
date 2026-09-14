@@ -59,7 +59,7 @@ func (s *Service) AdminListCurriculum(ctx context.Context) ([]AdminTier, error) 
 	challengeRows, err := s.db.Query(ctx, `
 		SELECT
 			c.id, c.batch_id, c.name, c.is_exam, c.time_limit_seconds,
-			c.question_count_required, c.pass_threshold_percent,
+			c.question_count_required, c.pass_threshold_percent, c.option_count,
 			(SELECT count(*) FROM questions q WHERE q.challenge_id = c.id AND q.status = 'published')
 		FROM challenges c
 		ORDER BY c.order_index
@@ -76,7 +76,7 @@ func (s *Service) AdminListCurriculum(ctx context.Context) ([]AdminTier, error) 
 		)
 		if err := challengeRows.Scan(
 			&c.ID, &batchID, &c.Name, &c.IsExam, &c.TimeLimitSeconds,
-			&c.QuestionCountRequired, &c.PassThresholdPercent, &c.QuestionBankSize,
+			&c.QuestionCountRequired, &c.PassThresholdPercent, &c.OptionCount, &c.QuestionBankSize,
 		); err != nil {
 			return nil, err
 		}

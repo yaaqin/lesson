@@ -8,6 +8,7 @@ export type AdminChallenge = {
   timeLimitSeconds: number;
   questionCountRequired: number;
   passThresholdPercent: number;
+  optionCount: number;
   questionBankSize: number;
 };
 

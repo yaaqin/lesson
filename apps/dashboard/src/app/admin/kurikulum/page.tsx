@@ -140,6 +140,12 @@ function ChallengeTimingRow({ challenge }: { challenge: AdminChallenge }) {
           {challenge.questionBankSize} soal di bank · {challenge.questionCountRequired} diambil ·
           lulus {challenge.passThresholdPercent}%
         </span>
+        <Link
+          href={`/admin/kurikulum/${challenge.id}`}
+          className="text-xs font-medium text-blue-600 dark:text-blue-400"
+        >
+          Kelola Soal →
+        </Link>
       </div>
 
       <div className="flex items-center gap-2">

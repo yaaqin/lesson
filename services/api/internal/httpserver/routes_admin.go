@@ -1,6 +1,10 @@
 package httpserver
 
-import "net/http"
+import (
+	"net/http"
+
+	"lesson/api/internal/curriculumsvc"
+)
 
 // registerAdminRoutes: dipakai apps/dashboard -> area /admin
 // (platform admin/superadmin: bank soal global, kurikulum, dan daftar organisasi terdaftar).
@@ -27,12 +31,12 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("PUT /admin/challenges/{id}", s.notImplemented)
 	mux.HandleFunc("DELETE /admin/challenges/{id}", s.notImplemented)
 
-	mux.HandleFunc("POST /admin/questions", s.notImplemented)
-	mux.HandleFunc("PUT /admin/questions/{id}", s.notImplemented)
-	mux.HandleFunc("DELETE /admin/questions/{id}", s.notImplemented)
-	mux.HandleFunc("POST /admin/questions/{id}/options", s.notImplemented)
-	mux.HandleFunc("PUT /admin/questions/{id}/options", s.notImplemented)
-	mux.HandleFunc("DELETE /admin/questions/{id}/options", s.notImplemented)
+	// Soal (bank soal) per challenge — prompt & opsi diedit bareng dalam 1 payload,
+	// gak dipisah endpoint /options sendiri (bentuk form-nya emang selalu 1 kesatuan).
+	mux.HandleFunc("GET /admin/challenges/{id}/questions", s.handleAdminListQuestions)
+	mux.HandleFunc("POST /admin/challenges/{id}/questions", s.handleAdminCreateQuestion)
+	mux.HandleFunc("PUT /admin/questions/{id}", s.handleAdminUpdateQuestion)
+	mux.HandleFunc("DELETE /admin/questions/{id}", s.handleAdminDeleteQuestion)
 
 	mux.HandleFunc("GET /admin/organizations", s.notImplemented)
 	mux.HandleFunc("GET /admin/stats", s.notImplemented)
@@ -70,6 +74,108 @@ func (s *Server) handleAdminUpdateChallengeTiming(w http.ResponseWriter, r *http
 
 	challengeID := r.PathValue("id")
 	if err := s.curriculum.AdminUpdateChallengeTiming(r.Context(), challengeID, req.TimeLimitSeconds); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminListQuestions(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	challengeID := r.PathValue("id")
+	questions, err := s.curriculum.AdminListQuestions(r.Context(), challengeID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, questions)
+}
+
+type questionOptionRequest struct {
+	Value     float64 `json:"value"`
+	IsCorrect bool    `json:"isCorrect"`
+}
+
+type upsertQuestionRequest struct {
+	Prompt  string                  `json:"prompt"`
+	Status  string                  `json:"status"`
+	Options []questionOptionRequest `json:"options"`
+}
+
+func toAdminOptions(input []questionOptionRequest) []curriculumsvc.AdminQuestionOption {
+	options := make([]curriculumsvc.AdminQuestionOption, len(input))
+	for i, o := range input {
+		options[i] = curriculumsvc.AdminQuestionOption{Value: o.Value, IsCorrect: o.IsCorrect}
+	}
+	return options
+}
+
+func normalizeStatus(status string) string {
+	switch status {
+	case "draft", "published", "archived":
+		return status
+	default:
+		return "published"
+	}
+}
+
+func (s *Server) handleAdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req upsertQuestionRequest
+	if err := decodeJSON(r, &req); err != nil || req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	challengeID := r.PathValue("id")
+	id, err := s.curriculum.AdminCreateQuestion(
+		r.Context(), challengeID, req.Prompt, normalizeStatus(req.Status), toAdminOptions(req.Options),
+	)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "validation_error", "message": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (s *Server) handleAdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req upsertQuestionRequest
+	if err := decodeJSON(r, &req); err != nil || req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	questionID := r.PathValue("id")
+	if err := s.curriculum.AdminUpdateQuestion(
+		r.Context(), questionID, req.Prompt, normalizeStatus(req.Status), toAdminOptions(req.Options),
+	); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "validation_error", "message": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminDeleteQuestion(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	questionID := r.PathValue("id")
+	if err := s.curriculum.AdminDeleteQuestion(r.Context(), questionID); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}

@@ -87,6 +87,7 @@ type AdminChallenge struct {
 	TimeLimitSeconds      int    `json:"timeLimitSeconds"`
 	QuestionCountRequired int    `json:"questionCountRequired"`
 	PassThresholdPercent  int    `json:"passThresholdPercent"`
+	OptionCount           int    `json:"optionCount"`
 	QuestionBankSize      int    `json:"questionBankSize"`
 }
 
@@ -101,4 +102,16 @@ type AdminTier struct {
 	Code    string       `json:"code"`
 	Name    string       `json:"name"`
 	Batches []AdminBatch `json:"batches"`
+}
+
+type AdminQuestionOption struct {
+	Value     float64 `json:"value"`
+	IsCorrect bool    `json:"isCorrect"`
+}
+
+type AdminQuestion struct {
+	ID      string                `json:"id"`
+	Prompt  string                `json:"prompt"`
+	Status  string                `json:"status"`
+	Options []AdminQuestionOption `json:"options"`
 }
