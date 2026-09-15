@@ -85,6 +85,19 @@ export default function AdminKurikulumPage() {
               <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
                 {tier.name}
               </h2>
+              {tier.batches.length === 0 && (
+                <Link
+                  href={`/admin/kurikulum/kategori/${tier.code}`}
+                  className="flex flex-col gap-1 rounded-2xl border border-black/[.08] bg-white p-5 transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
+                >
+                  <span className="text-sm font-medium text-black dark:text-zinc-50">
+                    Tier ini pakai kategori, bukan batch →
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-500">
+                    Lihat kategori & soal-nya di halaman terpisah.
+                  </span>
+                </Link>
+              )}
               {tier.batches.map((batch) => (
                 <div
                   key={batch.id}

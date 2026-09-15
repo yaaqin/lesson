@@ -29,6 +29,10 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /admin/curriculum", s.handleAdminListCurriculum)
 	mux.HandleFunc("PATCH /admin/challenges/{id}/timing", s.handleAdminUpdateChallengeTiming)
 
+	// Tier yang gak pake batch (mis. "umum") -- challenge-nya nempel ke category,
+	// jadi pohonnya beda bentuk & butuh endpoint sendiri (lihat admin.go).
+	mux.HandleFunc("GET /admin/tiers/{tierCode}/categories", s.handleAdminListCategories)
+
 	mux.HandleFunc("POST /admin/challenges", s.notImplemented)
 	mux.HandleFunc("PUT /admin/challenges/{id}", s.notImplemented)
 	mux.HandleFunc("DELETE /admin/challenges/{id}", s.notImplemented)
@@ -199,6 +203,21 @@ func (s *Server) handleAdminDeleteQuestion(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminListCategories(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	tierCode := r.PathValue("tierCode")
+	categories, err := s.curriculum.AdminListCategoriesByTier(r.Context(), tierCode)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, categories)
 }
 
 func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {

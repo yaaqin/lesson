@@ -155,6 +155,13 @@ type AdminTier struct {
 	Batches []AdminBatch `json:"batches"`
 }
 
+type AdminCategory struct {
+	ID         string           `json:"id"`
+	Code       string           `json:"code"`
+	Name       string           `json:"name"`
+	Challenges []AdminChallenge `json:"challenges"`
+}
+
 type AdminQuestionOption struct {
 	Value     float64 `json:"value"`
 	IsCorrect bool    `json:"isCorrect"`

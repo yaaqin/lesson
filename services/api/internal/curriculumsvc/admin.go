@@ -101,6 +101,78 @@ func (s *Service) AdminListCurriculum(ctx context.Context) ([]AdminTier, error) 
 	return tiers, nil
 }
 
+// AdminListCategoriesByTier: pohon Category -> Challenge buat tier yang gak
+// pake batch (mis. "umum" -- lihat migrations/0005_puzzle_categories.sql).
+// Dipisah dari AdminListCurriculum karena bentuk pohonnya beda (2 level, bukan
+// 3), tapi AdminChallenge-nya dipakai bareng sama field yang sama persis.
+func (s *Service) AdminListCategoriesByTier(ctx context.Context, tierCode string) ([]AdminCategory, error) {
+	catRows, err := s.db.Query(ctx, `
+		SELECT c.id, c.code, c.name
+		FROM categories c
+		JOIN tiers t ON t.id = c.tier_id
+		WHERE t.code = $1
+		ORDER BY c.order_index
+	`, tierCode)
+	if err != nil {
+		return nil, err
+	}
+	categories := []AdminCategory{}
+	catIndex := map[string]int{}
+	for catRows.Next() {
+		var c AdminCategory
+		if err := catRows.Scan(&c.ID, &c.Code, &c.Name); err != nil {
+			catRows.Close()
+			return nil, err
+		}
+		c.Challenges = []AdminChallenge{}
+		catIndex[c.ID] = len(categories)
+		categories = append(categories, c)
+	}
+	catRows.Close()
+	if err := catRows.Err(); err != nil {
+		return nil, err
+	}
+
+	challengeRows, err := s.db.Query(ctx, `
+		SELECT
+			ch.id, ch.category_id, ch.name, ch.is_exam, ch.time_limit_seconds,
+			ch.question_count_required, ch.pass_threshold_percent, ch.option_count,
+			(SELECT count(*) FROM questions q WHERE q.challenge_id = ch.id AND q.status = 'published')
+		FROM challenges ch
+		JOIN categories c ON c.id = ch.category_id
+		JOIN tiers t ON t.id = c.tier_id
+		WHERE t.code = $1
+		ORDER BY ch.order_index
+	`, tierCode)
+	if err != nil {
+		return nil, err
+	}
+	defer challengeRows.Close()
+
+	for challengeRows.Next() {
+		var (
+			ch         AdminChallenge
+			categoryID string
+		)
+		if err := challengeRows.Scan(
+			&ch.ID, &categoryID, &ch.Name, &ch.IsExam, &ch.TimeLimitSeconds,
+			&ch.QuestionCountRequired, &ch.PassThresholdPercent, &ch.OptionCount, &ch.QuestionBankSize,
+		); err != nil {
+			return nil, err
+		}
+		pos, ok := catIndex[categoryID]
+		if !ok {
+			continue
+		}
+		categories[pos].Challenges = append(categories[pos].Challenges, ch)
+	}
+	if err := challengeRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return categories, nil
+}
+
 // AdminUpdateChallengeTiming: satu-satunya field yang bisa diedit dari dashboard
 // admin di iterasi ini — durasi waktu (FSD.md belum punya endpoint ini, request
 // eksplisit dari user di sesi ini: "time yang per soal itu bisa diedit di dashboard").

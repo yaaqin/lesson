@@ -25,10 +25,26 @@ export type AdminTier = {
   batches: AdminBatch[];
 };
 
+export type AdminCategory = {
+  id: string;
+  code: string;
+  name: string;
+  challenges: AdminChallenge[];
+};
+
 export function useAdminCurriculumQuery() {
   return useQuery({
     queryKey: ["admin", "curriculum"],
     queryFn: async () => (await privateApi.get<AdminTier[]>("/admin/curriculum")).data,
+  });
+}
+
+export function useAdminCategoriesQuery(tierCode: string) {
+  return useQuery({
+    queryKey: ["admin", "categories", tierCode],
+    queryFn: async () =>
+      (await privateApi.get<AdminCategory[]>(`/admin/tiers/${tierCode}/categories`)).data,
+    enabled: !!tierCode,
   });
 }
 
