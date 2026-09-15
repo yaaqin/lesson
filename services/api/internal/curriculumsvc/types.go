@@ -1,5 +1,7 @@
 package curriculumsvc
 
+import "time"
+
 // --- Read (userApp) ---
 
 type Tier struct {
@@ -165,4 +167,36 @@ type AdminQuestion struct {
 	Status             string                `json:"status"`
 	Options            []AdminQuestionOption `json:"options,omitempty"`
 	CorrectAnswerValue *float64              `json:"correctAnswerValue,omitempty"`
+}
+
+type AdminUserListItem struct {
+	ID             string    `json:"id"`
+	Email          string    `json:"email"`
+	DisplayName    string    `json:"displayName"`
+	CurrentStreak  int       `json:"currentStreak"`
+	LongestStreak  int       `json:"longestStreak"`
+	LivesRemaining int       `json:"livesRemaining"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type AdminUserListResult struct {
+	Items    []AdminUserListItem `json:"items"`
+	Total    int                 `json:"total"`
+	Page     int                 `json:"page"`
+	PageSize int                 `json:"pageSize"`
+}
+
+type AdminUserDetail struct {
+	ID               string     `json:"id"`
+	Email            string     `json:"email"`
+	DisplayName      string     `json:"displayName"`
+	Role             string     `json:"role"`
+	CurrentStreak    int        `json:"currentStreak"`
+	LongestStreak    int        `json:"longestStreak"`
+	LastActiveDate   *time.Time `json:"lastActiveDate,omitempty"`
+	LivesRemaining   int        `json:"livesRemaining"`
+	LivesLastResetAt time.Time  `json:"livesLastResetAt"`
+	TotalAttempts    int        `json:"totalAttempts"`
+	PassedAttempts   int        `json:"passedAttempts"`
+	CreatedAt        time.Time  `json:"createdAt"`
 }

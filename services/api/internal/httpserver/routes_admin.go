@@ -1,7 +1,9 @@
 package httpserver
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 
 	"lesson/api/internal/curriculumsvc"
 )
@@ -40,6 +42,12 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 
 	mux.HandleFunc("GET /admin/organizations", s.notImplemented)
 	mux.HandleFunc("GET /admin/stats", s.notImplemented)
+
+	// Daftar & detail murid + reset nyawa manual (nyawa & streak persistent
+	// per-user, lihat curriculumsvc/gameplay.go & admin_users.go).
+	mux.HandleFunc("GET /admin/users", s.handleAdminListUsers)
+	mux.HandleFunc("GET /admin/users/{id}", s.handleAdminGetUser)
+	mux.HandleFunc("POST /admin/users/{id}/lives/reset", s.handleAdminResetUserLives)
 }
 
 func (s *Server) handleAdminListCurriculum(w http.ResponseWriter, r *http.Request) {
@@ -188,6 +196,63 @@ func (s *Server) handleAdminDeleteQuestion(w http.ResponseWriter, r *http.Reques
 	questionID := r.PathValue("id")
 	if err := s.curriculum.AdminDeleteQuestion(r.Context(), questionID); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	search := r.URL.Query().Get("q")
+
+	result, err := s.curriculum.AdminListUsers(r.Context(), page, pageSize, search)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	userID := r.PathValue("id")
+	detail, err := s.curriculum.AdminGetUserDetail(r.Context(), userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, curriculumsvc.ErrNotFound):
+			writeError(w, http.StatusNotFound, "not_found")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}
+
+func (s *Server) handleAdminResetUserLives(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	userID := r.PathValue("id")
+	if err := s.curriculum.AdminResetUserLives(r.Context(), userID); err != nil {
+		switch {
+		case errors.Is(err, curriculumsvc.ErrNotFound):
+			writeError(w, http.StatusNotFound, "not_found")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error")
+		}
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
