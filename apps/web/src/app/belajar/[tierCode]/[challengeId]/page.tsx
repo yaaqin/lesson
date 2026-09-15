@@ -895,7 +895,7 @@ function AdditionGridAnswer({
 
   const keypad = (
     <div className="flex flex-col items-center gap-3">
-      <div className="flex gap-1 rounded-full bg-black/[.04] p-1 text-xs dark:bg-white/[.06]">
+      <div className="hidden gap-1 rounded-full bg-black/[.04] p-1 text-xs md:flex dark:bg-white/[.06]">
         {(["left", "right"] as const).map((pos) => (
           <button
             key={pos}
