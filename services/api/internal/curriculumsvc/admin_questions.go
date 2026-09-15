@@ -34,7 +34,7 @@ func (s *Service) AdminListQuestions(ctx context.Context, challengeID string) ([
 	for rows.Next() {
 		var (
 			id, qType, prompt, status string
-			correctAnswer             float64
+			correctAnswer             *float64
 			optValue                  *float64
 			isCorrect                 *bool
 		)
@@ -45,7 +45,7 @@ func (s *Service) AdminListQuestions(ctx context.Context, challengeID string) ([
 		if !ok {
 			q = &AdminQuestion{ID: id, Type: qType, Prompt: prompt, Status: status}
 			if qType == QuestionTypeEssayNumeric {
-				q.CorrectAnswerValue = &correctAnswer
+				q.CorrectAnswerValue = correctAnswer
 			} else {
 				q.Options = []AdminQuestionOption{}
 			}
