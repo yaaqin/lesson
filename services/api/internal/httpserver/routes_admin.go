@@ -44,6 +44,13 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("PUT /admin/questions/{id}", s.handleAdminUpdateQuestion)
 	mux.HandleFunc("DELETE /admin/questions/{id}", s.handleAdminDeleteQuestion)
 
+	// Soal grid_puzzle (addition_grid/cryptarithm) -- payload-nya JSONB per-kind,
+	// gak muat ke bentuk upsertQuestionRequest di atas, jadi endpoint terpisah.
+	// DELETE dipakai bareng /admin/questions/{id} di atas (puzzle_questions cascade).
+	mux.HandleFunc("GET /admin/challenges/{id}/puzzle-questions", s.handleAdminListPuzzleQuestions)
+	mux.HandleFunc("POST /admin/challenges/{id}/puzzle-questions", s.handleAdminCreatePuzzleQuestion)
+	mux.HandleFunc("PUT /admin/puzzle-questions/{id}", s.handleAdminUpdatePuzzleQuestion)
+
 	mux.HandleFunc("GET /admin/organizations", s.notImplemented)
 	mux.HandleFunc("GET /admin/stats", s.notImplemented)
 
@@ -189,6 +196,82 @@ func (s *Server) handleAdminUpdateQuestion(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type puzzleUpsertRequest struct {
+	Kind         string   `json:"kind"`
+	Prompt       string   `json:"prompt"`
+	Status       string   `json:"status"`
+	Size         int      `json:"size"`
+	SolutionGrid [][]int  `json:"solutionGrid"`
+	GivenMask    [][]bool `json:"givenMask"`
+	Words        []string `json:"words"`
+	Result       string   `json:"result"`
+}
+
+func toPuzzleUpsert(req puzzleUpsertRequest) curriculumsvc.AdminPuzzleUpsert {
+	return curriculumsvc.AdminPuzzleUpsert{
+		Kind: req.Kind, Prompt: req.Prompt, Status: normalizeStatus(req.Status),
+		Size: req.Size, SolutionGrid: req.SolutionGrid, GivenMask: req.GivenMask,
+		Words: req.Words, Result: req.Result,
+	}
+}
+
+func (s *Server) handleAdminListPuzzleQuestions(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	challengeID := r.PathValue("id")
+	questions, err := s.curriculum.AdminListPuzzleQuestions(r.Context(), challengeID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, questions)
+}
+
+func (s *Server) handleAdminCreatePuzzleQuestion(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req puzzleUpsertRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	challengeID := r.PathValue("id")
+	result, err := s.curriculum.AdminCreatePuzzleQuestion(r.Context(), challengeID, toPuzzleUpsert(req))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "validation_error", "message": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (s *Server) handleAdminUpdatePuzzleQuestion(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req puzzleUpsertRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	questionID := r.PathValue("id")
+	result, err := s.curriculum.AdminUpdatePuzzleQuestion(r.Context(), questionID, toPuzzleUpsert(req))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "validation_error", "message": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleAdminDeleteQuestion(w http.ResponseWriter, r *http.Request) {

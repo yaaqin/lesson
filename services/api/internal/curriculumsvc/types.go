@@ -43,6 +43,11 @@ const (
 	QuestionTypeGridPuzzle     = "grid_puzzle"
 )
 
+const (
+	PuzzleKindAdditionGrid = "addition_grid"
+	PuzzleKindCryptarithm  = "cryptarithm"
+)
+
 type QuestionOption struct {
 	Value     float64 `json:"value"`
 	IsCorrect bool    `json:"isCorrect"`
@@ -174,6 +179,39 @@ type AdminQuestion struct {
 	Status             string                `json:"status"`
 	Options            []AdminQuestionOption `json:"options,omitempty"`
 	CorrectAnswerValue *float64              `json:"correctAnswerValue,omitempty"`
+}
+
+// AdminPuzzleQuestion: view admin-only 1 soal grid_puzzle -- BEDA dari
+// PuzzlePayload (yang dikirim ke userApp lewat StartChallenge, solusinya
+// sengaja gak ada di situ). Di sini solusinya SENGAJA ikut biar admin bisa
+// lihat & edit lewat dashboard.
+type AdminPuzzleQuestion struct {
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Prompt string `json:"prompt"`
+	Status string `json:"status"`
+	// addition_grid
+	Size         int      `json:"size,omitempty"`
+	SolutionGrid [][]int  `json:"solutionGrid,omitempty"`
+	GivenMask    [][]bool `json:"givenMask,omitempty"`
+	// cryptarithm -- Words termasuk kata hasil di elemen terakhir (konsisten
+	// sama shape cryptarithmRaw di puzzle.go), Solution diisi server lewat
+	// SolveCryptarithm, gak pernah diketik manual.
+	Words    []string       `json:"words,omitempty"`
+	Solution map[string]int `json:"solution,omitempty"`
+}
+
+// AdminPuzzleUpsert: body request create/update, Kind nentuin field mana yang
+// dipakai (sama pola diskriminasi kayak upsertQuestionRequest di routes_admin.go).
+type AdminPuzzleUpsert struct {
+	Kind         string
+	Prompt       string
+	Status       string
+	Size         int
+	SolutionGrid [][]int
+	GivenMask    [][]bool
+	Words        []string // addend, TANPA kata hasil
+	Result       string
 }
 
 type AdminUserListItem struct {

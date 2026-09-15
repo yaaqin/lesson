@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand/v2"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"lesson/api/internal/config"
+	"lesson/api/internal/curriculumsvc"
 )
 
 // Seed tier "umum": tier tanpa batch (uses_batch = false), challenge-nya
@@ -123,7 +123,7 @@ func seedAdditionLevel(ctx context.Context, pool *pgxpool.Pool, categoryID strin
 	}
 
 	for i := 0; i < spec.additionPuzzleCount; i++ {
-		solution, givenMask := generateAdditionGrid(spec.additionGridSize)
+		solution, givenMask := curriculumsvc.GenerateAdditionGrid(spec.additionGridSize)
 		payload := additionGridPayload{Size: spec.additionGridSize, SolutionGrid: solution, GivenMask: givenMask}
 		payloadJSON, err := json.Marshal(payload)
 		if err != nil {
@@ -165,7 +165,7 @@ func seedCryptarithmLevel(ctx context.Context, pool *pgxpool.Pool, categoryID st
 	}
 
 	for _, puzzle := range spec.cryptarithmPuzzles {
-		solution, err := solveCryptarithm(puzzle.words, puzzle.result)
+		solution, err := curriculumsvc.SolveCryptarithm(puzzle.words, puzzle.result)
 		if err != nil {
 			return fmt.Errorf("%s+%s: %w", puzzle.words, puzzle.result, err)
 		}
@@ -211,117 +211,6 @@ func joinPlus(words []string) string {
 		out += w
 	}
 	return out
-}
-
-// generateAdditionGrid: acak permutasi 1..size*size ke kotak NxN, lalu pilih
-// max(2,size) sel acak buat jadi "given" (kesisanya kosong buat diisi user).
-// rowSums/colSums gak disimpen di sini -- dihitung on-the-fly dari
-// SolutionGrid di curriculumsvc.derivePuzzle (server-side, satu sumber kebenaran).
-func generateAdditionGrid(size int) (solution [][]int, givenMask [][]bool) {
-	values := make([]int, size*size)
-	for i := range values {
-		values[i] = i + 1
-	}
-	rand.Shuffle(len(values), func(i, j int) { values[i], values[j] = values[j], values[i] })
-
-	solution = make([][]int, size)
-	for i := 0; i < size; i++ {
-		solution[i] = append([]int{}, values[i*size:(i+1)*size]...)
-	}
-
-	givenMask = make([][]bool, size)
-	for i := range givenMask {
-		givenMask[i] = make([]bool, size)
-	}
-	givenCount := size
-	if givenCount < 2 {
-		givenCount = 2
-	}
-	cells := rand.Perm(size * size)
-	for i := 0; i < givenCount; i++ {
-		r, c := cells[i]/size, cells[i]%size
-		givenMask[r][c] = true
-	}
-	return solution, givenMask
-}
-
-// solveCryptarithm: brute-force nyari 1 solusi valid (huruf -> digit unik
-// 0-9, huruf awal kata gak boleh 0) buat words[0]+words[1]+...=result. Dipake
-// buat MEMVALIDASI puzzle yang di-seed beneran solvable & benar secara
-// aritmatika sebelum disimpen -- bukan cuma percaya hasil hitungan manual.
-func solveCryptarithm(words []string, result string) (map[string]int, error) {
-	all := append(append([]string{}, words...), result)
-	letterSet := map[rune]bool{}
-	for _, w := range all {
-		for _, ch := range w {
-			letterSet[ch] = true
-		}
-	}
-	letters := make([]rune, 0, len(letterSet))
-	for ch := range letterSet {
-		letters = append(letters, ch)
-	}
-	if len(letters) > 10 {
-		return nil, errors.New("lebih dari 10 huruf unik, gak mungkin dipetakan ke digit 0-9")
-	}
-
-	leading := map[rune]bool{}
-	for _, w := range all {
-		if len(w) > 1 {
-			leading[rune(w[0])] = true
-		}
-	}
-
-	digits := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	assignment := map[rune]int{}
-	used := make([]bool, 10)
-
-	var wordValue func(w string, m map[rune]int) int
-	wordValue = func(w string, m map[rune]int) int {
-		n := 0
-		for _, ch := range w {
-			n = n*10 + m[ch]
-		}
-		return n
-	}
-
-	var backtrack func(idx int) bool
-	backtrack = func(idx int) bool {
-		if idx == len(letters) {
-			sum := 0
-			for _, w := range words {
-				sum += wordValue(w, assignment)
-			}
-			return sum == wordValue(result, assignment)
-		}
-		ch := letters[idx]
-		for _, d := range digits {
-			if used[d] {
-				continue
-			}
-			if d == 0 && leading[ch] {
-				continue
-			}
-			used[d] = true
-			assignment[ch] = d
-			if backtrack(idx + 1) {
-				return true
-			}
-			used[d] = false
-			delete(assignment, ch)
-		}
-		return false
-	}
-
-	if !backtrack(0) {
-		return nil, errors.New("gak solvable")
-	}
-
-	out := make(map[string]int, len(assignment))
-	for ch, d := range assignment {
-		out[string(ch)] = d
-	}
-	return out, nil
 }
 
 func getOrCreateTier(ctx context.Context, pool *pgxpool.Pool, code, name string, usesBatch bool, orderIndex int) (string, error) {

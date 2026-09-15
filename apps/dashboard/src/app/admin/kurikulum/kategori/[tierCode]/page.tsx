@@ -10,7 +10,6 @@ import {
   useUpdateChallengeTimingMutation,
   type AdminChallenge,
 } from "@/hooks/use-admin-curriculum";
-import { useAdminQuestionsQuery } from "@/hooks/use-admin-questions";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
 
 export default function AdminKategoriPage() {
@@ -73,11 +72,8 @@ export default function AdminKategoriPage() {
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-500">
             Challenge di tier ini nempel ke kategori (bukan batch), jadi ditampilin di halaman
-            terpisah. Soal tipe puzzle (grid/cryptarithm) cuma bisa di-generate lewat{" "}
-            <code className="rounded bg-black/[.06] px-1 py-0.5 text-xs dark:bg-white/[.08]">
-              cmd/seed-puzzle
-            </code>{" "}
-            — belum ada form edit di dashboard, di sini cuma buat lihat & atur waktu.
+            terpisah. Klik &ldquo;Kelola Soal&rdquo; buat CRUD soal puzzle-nya (addition grid /
+            cryptarithm).
           </p>
         </div>
 
@@ -100,7 +96,11 @@ export default function AdminKategoriPage() {
               <div className="flex flex-col gap-2 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-900">
                 <div className="flex flex-col divide-y divide-black/[.06] dark:divide-white/[.08]">
                   {category.challenges.map((challenge) => (
-                    <CategoryChallengeRow key={challenge.id} challenge={challenge} />
+                    <CategoryChallengeRow
+                      key={challenge.id}
+                      tierCode={params.tierCode}
+                      challenge={challenge}
+                    />
                   ))}
                 </div>
               </div>
@@ -112,12 +112,16 @@ export default function AdminKategoriPage() {
   );
 }
 
-function CategoryChallengeRow({ challenge }: { challenge: AdminChallenge }) {
+function CategoryChallengeRow({
+  tierCode,
+  challenge,
+}: {
+  tierCode: string;
+  challenge: AdminChallenge;
+}) {
   const [value, setValue] = useState(String(challenge.timeLimitSeconds));
   const [saved, setSaved] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const updateMutation = useUpdateChallengeTimingMutation();
-  const questionsQuery = useAdminQuestionsQuery(expanded ? challenge.id : "");
 
   const dirty = Number(value) !== challenge.timeLimitSeconds;
 
@@ -136,63 +140,41 @@ function CategoryChallengeRow({ challenge }: { challenge: AdminChallenge }) {
   };
 
   return (
-    <div className="flex flex-col gap-3 py-3">
-      <div className="flex items-center gap-3">
-        <div className="flex flex-1 flex-col">
-          <span className="text-sm font-medium text-black dark:text-zinc-50">{challenge.name}</span>
-          <span className="text-xs text-zinc-500 dark:text-zinc-500">
-            {challenge.questionBankSize} soal di bank · {challenge.questionCountRequired} diambil ·
-            lulus {challenge.passThresholdPercent}%
-          </span>
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-            className="w-fit text-xs font-medium text-blue-600 dark:text-blue-400"
-          >
-            {expanded ? "Sembunyikan soal ▲" : "Lihat soal →"}
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="w-20 rounded-lg border border-black/[.08] bg-transparent px-2 py-1.5 text-right text-sm text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
-          />
-          <span className="text-xs text-zinc-500 dark:text-zinc-500">
-            {challenge.isExam ? "detik total" : "detik/soal"}
-          </span>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!dirty || updateMutation.isPending}
-            className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-40"
-          >
-            {saved ? "Tersimpan ✓" : updateMutation.isPending ? "…" : "Simpan"}
-          </button>
-        </div>
+    <div className="flex items-center gap-3 py-3">
+      <div className="flex flex-1 flex-col">
+        <span className="text-sm font-medium text-black dark:text-zinc-50">{challenge.name}</span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-500">
+          {challenge.questionBankSize} soal di bank · {challenge.questionCountRequired} diambil ·
+          lulus {challenge.passThresholdPercent}%
+        </span>
+        <Link
+          href={`/admin/kurikulum/kategori/${tierCode}/${challenge.id}`}
+          className="w-fit text-xs font-medium text-blue-600 dark:text-blue-400"
+        >
+          Kelola Soal →
+        </Link>
       </div>
 
-      {expanded && (
-        <div className="flex flex-col gap-2 rounded-xl bg-zinc-50 p-3 dark:bg-black/40">
-          {questionsQuery.isLoading && (
-            <span className="text-xs text-zinc-500 dark:text-zinc-500">Memuat soal…</span>
-          )}
-          {questionsQuery.data?.map((q, i) => (
-            <div key={q.id} className="flex flex-col gap-0.5 text-xs">
-              <span className="font-medium text-zinc-600 dark:text-zinc-400">
-                Soal {i + 1} · {q.type} · {q.status}
-              </span>
-              <span className="text-zinc-500 dark:text-zinc-500">{q.prompt}</span>
-            </div>
-          ))}
-          {questionsQuery.data?.length === 0 && (
-            <span className="text-xs text-zinc-500 dark:text-zinc-500">Belum ada soal.</span>
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-20 rounded-lg border border-black/[.08] bg-transparent px-2 py-1.5 text-right text-sm text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
+        />
+        <span className="text-xs text-zinc-500 dark:text-zinc-500">
+          {challenge.isExam ? "detik total" : "detik/soal"}
+        </span>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!dirty || updateMutation.isPending}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-40"
+        >
+          {saved ? "Tersimpan ✓" : updateMutation.isPending ? "…" : "Simpan"}
+        </button>
+      </div>
     </div>
   );
 }
