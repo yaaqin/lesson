@@ -13,8 +13,9 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 	// Curriculum (read-only)
 	mux.HandleFunc("GET /app/tiers", s.handleListTiers)
 	mux.HandleFunc("GET /app/tiers/{tierCode}/batches", s.handleListBatches)
-	mux.HandleFunc("GET /app/tiers/{tierId}/categories", s.notImplemented)
+	mux.HandleFunc("GET /app/tiers/{tierCode}/categories", s.handleListCategories)
 	mux.HandleFunc("GET /app/batches/{batchId}/challenges", s.handleListChallenges)
+	mux.HandleFunc("GET /app/categories/{categoryId}/challenges", s.handleListChallengesByCategory)
 	mux.HandleFunc("GET /app/challenges/{challengeId}", s.notImplemented)
 
 	// Gameplay (platform challenge)
@@ -55,6 +56,32 @@ func (s *Server) handleListBatches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, batches)
+}
+
+func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
+	tierCode := r.PathValue("tierCode")
+	categories, err := s.curriculum.ListCategoriesByTierCode(r.Context(), tierCode)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, categories)
+}
+
+func (s *Server) handleListChallengesByCategory(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	categoryID := r.PathValue("categoryId")
+	challenges, err := s.curriculum.ListChallengesByCategory(r.Context(), categoryID, claims.Subject)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, challenges)
 }
 
 func (s *Server) handleListChallenges(w http.ResponseWriter, r *http.Request) {

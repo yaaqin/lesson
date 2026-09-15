@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useLogoutMutation } from "@/hooks/use-auth";
 import { useTiersQuery } from "@/hooks/use-curriculum";
 
-const TIER_ICON: Record<string, string> = { sd: "➕", smp: "📐", smk: "📊" };
+const TIER_ICON: Record<string, string> = { sd: "➕", smp: "📐", smk: "📊", umum: "🧩" };
 
 export default function TierPickerScreen() {
   const scheme = useColorScheme();

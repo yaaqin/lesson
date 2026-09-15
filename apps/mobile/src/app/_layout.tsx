@@ -25,6 +25,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="belajar/index" options={{ title: "Pilih Jenjang", headerBackVisible: false }} />
           <Stack.Screen name="belajar/[tierCode]/index" options={{ title: "Kurikulum" }} />
+          <Stack.Screen name="belajar/[tierCode]/kategori/[categoryId]" options={{ title: "Level" }} />
           <Stack.Screen
             name="belajar/[tierCode]/[challengeId]"
             options={{ title: "Challenge", headerBackTitle: "Keluar" }}

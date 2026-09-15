@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { usePuzzlePrefsStore } from "@/store/puzzle-prefs-store";
 import {
   useMeQuery,
   useStartChallengeMutation,
   useSubmitAttemptMutation,
+  type PuzzlePayload,
   type StartResult,
   type SubmitResult,
 } from "@/hooks/use-curriculum";
@@ -28,6 +30,7 @@ export default function ChallengePage() {
   const [game, setGame] = useState<StartResult | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [gridAnswers, setGridAnswers] = useState<Record<string, Record<string, number>>>({});
   const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -48,6 +51,7 @@ export default function ChallengePage() {
     setPhase("loading");
     setCurrentIndex(0);
     setAnswers({});
+    setGridAnswers({});
     setEssayDrafts({});
     setSelected(null);
     setResult(null);
@@ -78,12 +82,13 @@ export default function ChallengePage() {
   }, [session, params.challengeId, beginAttempt]);
 
   const submitWithAnswers = useCallback(
-    (finalAnswers: Record<string, number>) => {
+    (finalAnswers: Record<string, number>, finalGridAnswers: Record<string, Record<string, number>>) => {
       if (!game || submittingRef.current) return;
       submittingRef.current = true;
       const payload = game.questions.map((q) => ({
         questionId: q.id,
         selectedValue: finalAnswers[q.id] ?? null,
+        selectedGrid: finalGridAnswers[q.id],
       }));
       submitMutation.mutate(
         { attemptId: game.attemptId, answers: payload },
@@ -113,12 +118,33 @@ export default function ChallengePage() {
       // kepencet dobel selagi nunggu submitWithAnswers() kelar (race klik ganda).
       setCurrentIndex(nextIndex);
       if (nextIndex >= game.questions.length) {
-        submitWithAnswers(finalAnswers);
+        submitWithAnswers(finalAnswers, gridAnswers);
       } else {
         setTimeLeft(game.timeLimitSeconds);
       }
     },
-    [game, currentIndex, answers, submitWithAnswers],
+    [game, currentIndex, answers, gridAnswers, submitWithAnswers],
+  );
+
+  // grid_puzzle (kotak addition / cryptarithm): submit sekali per puzzle (gak
+  // ada auto-advance kayak MC/essay karena challenge puzzle selalu cuma 1 soal),
+  // lanjutannya sama kayak advanceRegular -- geser currentIndex, submit kalau abis.
+  const handleAnswerPuzzle = useCallback(
+    (grid: Record<string, number>) => {
+      if (!game) return;
+      const q = game.questions[currentIndex];
+      const finalGridAnswers = { ...gridAnswers, [q.id]: grid };
+      setGridAnswers(finalGridAnswers);
+
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      if (nextIndex >= game.questions.length) {
+        submitWithAnswers(answers, finalGridAnswers);
+      } else {
+        setTimeLeft(game.timeLimitSeconds);
+      }
+    },
+    [game, currentIndex, answers, gridAnswers, submitWithAnswers],
   );
 
   // Timer per soal (challenge biasa)
@@ -136,12 +162,12 @@ export default function ChallengePage() {
   useEffect(() => {
     if (phase !== "playing" || !game || !game.isExam) return;
     if (timeLeft <= 0) {
-      const id = setTimeout(() => submitWithAnswers(answers), 0);
+      const id = setTimeout(() => submitWithAnswers(answers, gridAnswers), 0);
       return () => clearTimeout(id);
     }
     const timer = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
     return () => clearTimeout(timer);
-  }, [timeLeft, phase, game, answers, submitWithAnswers]);
+  }, [timeLeft, phase, game, answers, gridAnswers, submitWithAnswers]);
 
   const handleAnswerRegular = (value: number) => {
     if (selected !== null) return;
@@ -233,7 +259,7 @@ export default function ChallengePage() {
             onEssayChange={handleEssayDraftChange}
             timeLeft={timeLeft}
             onAnswer={handleAnswerExam}
-            onFinish={() => submitWithAnswers(answers)}
+            onFinish={() => submitWithAnswers(answers, gridAnswers)}
           />
         )}
 
@@ -246,6 +272,7 @@ export default function ChallengePage() {
             timeLeft={timeLeft}
             selected={selected}
             onAnswer={handleAnswerRegular}
+            onAnswerPuzzle={handleAnswerPuzzle}
           />
         )}
 
@@ -267,6 +294,7 @@ export default function ChallengePage() {
             onRetry={retry}
             questions={game.questions}
             answers={answers}
+            gridAnswers={gridAnswers}
           />
         )}
       </main>
@@ -281,6 +309,7 @@ function RegularView({
   timeLeft,
   selected,
   onAnswer,
+  onAnswerPuzzle,
 }: {
   game: StartResult;
   currentIndex: number;
@@ -288,9 +317,12 @@ function RegularView({
   timeLeft: number;
   selected: number | null;
   onAnswer: (value: number) => void;
+  onAnswerPuzzle: (grid: Record<string, number>) => void;
 }) {
   const [essayValue, setEssayValue] = useState("");
+  const [showPuzzleInfo, setShowPuzzleInfo] = useState(false);
   const isEssay = currentQuestion.type === "essay_numeric";
+  const isPuzzle = currentQuestion.type === "grid_puzzle";
 
   const submitEssay = () => {
     if (selected !== null || essayValue === "" || essayValue === "-") return;
@@ -337,12 +369,33 @@ function RegularView({
             ✏️ Isian — ketik jawabannya
           </span>
         )}
-        <h2 className="text-4xl font-semibold tracking-tight text-black dark:text-zinc-50">
+        {isPuzzle && (
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+              🧩 Puzzle
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPuzzleInfo(true)}
+              aria-label="Cara main"
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-purple-300 text-xs font-bold text-purple-700 hover:bg-purple-50 dark:border-purple-500/40 dark:text-purple-400 dark:hover:bg-purple-500/10"
+            >
+              ?
+            </button>
+          </div>
+        )}
+        <h2 className={isPuzzle ? "text-center text-base text-zinc-600 dark:text-zinc-400" : "text-4xl font-semibold tracking-tight text-black dark:text-zinc-50"}>
           {currentQuestion.prompt}
         </h2>
       </div>
 
-      {isEssay ? (
+      {isPuzzle && showPuzzleInfo && currentQuestion.puzzle && (
+        <PuzzleInfoModal kind={currentQuestion.puzzle.kind} onClose={() => setShowPuzzleInfo(false)} />
+      )}
+
+      {isPuzzle && currentQuestion.puzzle ? (
+        <PuzzleAnswerView puzzle={currentQuestion.puzzle} onSubmit={onAnswerPuzzle} />
+      ) : isEssay ? (
         <div className="flex justify-center">
           <NumericKeypad
             value={selected !== null ? String(selected) : essayValue}
@@ -532,6 +585,7 @@ function ResultView({
   onRetry,
   questions,
   answers,
+  gridAnswers,
 }: {
   challengeName: string;
   result: SubmitResult;
@@ -543,6 +597,7 @@ function ResultView({
   onRetry: () => void;
   questions: StartResult["questions"];
   answers: Record<string, number>;
+  gridAnswers: Record<string, Record<string, number>>;
 }) {
   return (
     <div className="flex flex-col items-center gap-6 py-8 text-center">
@@ -606,6 +661,26 @@ function ResultView({
 
       <ol className="flex w-full flex-col gap-2 text-left text-sm">
         {questions.map((q, idx) => {
+          if (q.type === "grid_puzzle") {
+            // Solusi puzzle sengaja gak pernah dikirim ke klien (lihat PuzzlePayload),
+            // jadi benar/salahnya dibaca dari `passed` -- challenge puzzle selalu cuma
+            // 1 soal & lulus minimal 100%, jadi passed = puzzle ini bener persis.
+            const attempted = !!gridAnswers[q.id];
+            return (
+              <li
+                key={q.id}
+                className="flex items-center justify-between rounded-xl border border-black/[.08] bg-white px-4 py-2 dark:border-white/[.145] dark:bg-zinc-900"
+              >
+                <span className="text-zinc-600 dark:text-zinc-400">
+                  {idx + 1}. {q.prompt}
+                </span>
+                <span className={passed ? "text-green-600 dark:text-green-400" : "text-red-500"}>
+                  {attempted ? (passed ? "Benar ✓" : "Belum tepat ✗") : "— ✗"}
+                </span>
+              </li>
+            );
+          }
+
           const selectedValue = answers[q.id];
           const correctValue =
             q.type === "essay_numeric"
@@ -721,6 +796,301 @@ function NumericKeypad({
             Jawab
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// PuzzleAnswerView: soal grid_puzzle selalu satu-satunya soal di sesi (lihat
+// seed-puzzle), jadi gak ada auto-advance kayak MC/essay -- cuma satu tombol
+// "Jawab" yang aktif begitu semua sel/huruf keisi, langsung submit ke server
+// (solusinya emang gak pernah ada di klien buat dicek sendiri -- PuzzlePayload
+// sengaja gak bawa itu).
+function PuzzleAnswerView({
+  puzzle,
+  onSubmit,
+}: {
+  puzzle: PuzzlePayload;
+  onSubmit: (grid: Record<string, number>) => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  const setCell = (key: string, raw: string) => {
+    setValues((prev) => ({ ...prev, [key]: raw }));
+  };
+
+  const allFilled = puzzle.blankKeys.every((key) => values[key] !== undefined && values[key] !== "");
+
+  const submit = () => {
+    if (!allFilled) return;
+    const grid: Record<string, number> = {};
+    for (const key of puzzle.blankKeys) {
+      grid[key] = Number(values[key]);
+    }
+    onSubmit(grid);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+      {puzzle.kind === "addition_grid" ? (
+        <AdditionGridAnswer
+          puzzle={puzzle}
+          values={values}
+          selectedKey={selectedKey}
+          onSelectKey={setSelectedKey}
+          onCellChange={setCell}
+        />
+      ) : (
+        <CryptarithmInput puzzle={puzzle} values={values} onCellChange={setCell} />
+      )}
+      <button
+        type="button"
+        disabled={!allFilled}
+        onClick={submit}
+        className="w-full max-w-xs rounded-full bg-foreground py-3 text-sm font-semibold text-background disabled:opacity-40"
+      >
+        Jawab
+      </button>
+    </div>
+  );
+}
+
+// AdditionGridAnswer: gabungin kotak grid + keypad angka on-screen. Angka yang
+// udah kepake di kotak lain otomatis di-disable di keypad, jadi user gak bisa
+// gak sengaja masukin angka dobel (lihat curriculumsvc/puzzle.go -- solusinya
+// emang harus tiap angka 1..N² dipakai tepat sekali, bukan cuma soal sum cocok).
+function AdditionGridAnswer({
+  puzzle,
+  values,
+  selectedKey,
+  onSelectKey,
+  onCellChange,
+}: {
+  puzzle: PuzzlePayload;
+  values: Record<string, string>;
+  selectedKey: string | null;
+  onSelectKey: (key: string | null) => void;
+  onCellChange: (key: string, raw: string) => void;
+}) {
+  const size = puzzle.size ?? 3;
+  const maxNumber = size * size;
+  const keyboardPosition = usePuzzlePrefsStore((s) => s.keyboardPosition);
+  const setKeyboardPosition = usePuzzlePrefsStore((s) => s.setKeyboardPosition);
+
+  const usedNumbers = new Set<number>();
+  for (const v of Object.values(puzzle.given ?? {})) usedNumbers.add(v);
+  for (const [key, raw] of Object.entries(values)) {
+    if (key === selectedKey || raw === "") continue;
+    usedNumbers.add(Number(raw));
+  }
+
+  const pick = (n: number) => {
+    if (!selectedKey) return;
+    onCellChange(selectedKey, String(n));
+    const idx = puzzle.blankKeys.indexOf(selectedKey);
+    const next = puzzle.blankKeys.slice(idx + 1).find((k) => !values[k]);
+    onSelectKey(next ?? null);
+  };
+
+  const keypad = (
+    <div className="flex flex-col items-center gap-3">
+      <div className="flex gap-1 rounded-full bg-black/[.04] p-1 text-xs dark:bg-white/[.06]">
+        {(["left", "right"] as const).map((pos) => (
+          <button
+            key={pos}
+            type="button"
+            onClick={() => setKeyboardPosition(pos)}
+            className={`rounded-full px-3 py-1 font-medium transition-colors ${
+              keyboardPosition === pos
+                ? "bg-white shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                : "text-zinc-500 dark:text-zinc-500"
+            }`}
+          >
+            {pos === "left" ? "⬅ Kiri" : "Kanan ➡"}
+          </button>
+        ))}
+      </div>
+      <div className="grid w-fit grid-cols-5 gap-2">
+        {Array.from({ length: maxNumber }, (_, i) => i + 1).map((n) => {
+          const disabled = !selectedKey || usedNumbers.has(n);
+          return (
+            <button
+              key={n}
+              type="button"
+              disabled={disabled}
+              onClick={() => pick(n)}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-black/[.08] bg-white text-sm font-bold text-black transition-colors hover:enabled:border-blue-400 disabled:cursor-not-allowed disabled:opacity-30 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        disabled={!selectedKey}
+        onClick={() => selectedKey && onCellChange(selectedKey, "")}
+        className="rounded-lg border border-black/[.08] px-4 py-2 text-xs font-medium text-zinc-600 disabled:opacity-40 dark:border-white/[.145] dark:text-zinc-400"
+      >
+        ⌫ Hapus
+      </button>
+    </div>
+  );
+
+  return (
+    <div
+      className={`flex flex-col items-center gap-6 md:items-start ${
+        keyboardPosition === "left" ? "md:flex-row-reverse" : "md:flex-row"
+      }`}
+    >
+      <AdditionGridInput puzzle={puzzle} values={values} selectedKey={selectedKey} onSelectKey={onSelectKey} />
+      {keypad}
+    </div>
+  );
+}
+
+function AdditionGridInput({
+  puzzle,
+  values,
+  selectedKey,
+  onSelectKey,
+}: {
+  puzzle: PuzzlePayload;
+  values: Record<string, string>;
+  selectedKey: string | null;
+  onSelectKey: (key: string) => void;
+}) {
+  const size = puzzle.size ?? 3;
+  const cellPx = size >= 5 ? 44 : size === 4 ? 52 : 64;
+  const fontSize = size >= 5 ? 15 : 20;
+
+  return (
+    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${size + 1}, ${cellPx}px)` }}>
+      {Array.from({ length: size }).map((_, r) => (
+        <div key={`row-${r}`} className="contents">
+          {Array.from({ length: size }).map((_, c) => {
+            const key = `r${r}c${c}`;
+            const given = puzzle.given?.[key];
+            if (given !== undefined) {
+              return (
+                <div
+                  key={key}
+                  className="flex items-center justify-center rounded-lg border-2 border-black/[.08] bg-zinc-100 font-bold text-black dark:border-white/[.145] dark:bg-zinc-800 dark:text-zinc-50"
+                  style={{ width: cellPx, height: cellPx, fontSize }}
+                >
+                  {given}
+                </div>
+              );
+            }
+            const isSelected = selectedKey === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onSelectKey(key)}
+                className={`flex items-center justify-center rounded-lg border-2 text-center font-bold outline-none transition-colors ${
+                  isSelected
+                    ? "border-blue-600 bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300"
+                    : "border-blue-400 bg-white text-blue-700 hover:border-blue-500 dark:bg-zinc-900 dark:text-blue-400"
+                }`}
+                style={{ width: cellPx, height: cellPx, fontSize }}
+              >
+                {values[key] ?? ""}
+              </button>
+            );
+          })}
+          <div
+            className="flex items-center justify-center rounded-lg bg-amber-50 text-sm font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+            style={{ width: cellPx, height: cellPx }}
+          >
+            {puzzle.rowSums?.[r]}
+          </div>
+        </div>
+      ))}
+      <div className="contents">
+        {Array.from({ length: size }).map((_, c) => (
+          <div
+            key={`colsum-${c}`}
+            className="flex items-center justify-center rounded-lg bg-amber-50 text-sm font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+            style={{ width: cellPx, height: cellPx }}
+          >
+            {puzzle.colSums?.[c]}
+          </div>
+        ))}
+        <div style={{ width: cellPx, height: cellPx }} />
+      </div>
+    </div>
+  );
+}
+
+function PuzzleInfoModal({ kind, onClose }: { kind: PuzzlePayload["kind"]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-2xl bg-white p-5 dark:bg-zinc-900"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-black dark:text-zinc-50">Cara main</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Tutup"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 hover:bg-black/[.06] dark:hover:bg-white/[.08]"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          {kind === "addition_grid"
+            ? "Isi tiap kotak kosong dengan angka 1 sampai jumlah kotaknya (misal 1-9 buat kotak 3x3) -- setiap angka cuma boleh dipakai TEPAT SEKALI di seluruh kotak, gak boleh ada yang dobel. Klik kotak kosong, lalu pilih angkanya di keypad -- angka yang udah kepake otomatis kekunci biar gak salah pilih. Jumlah angka di tiap baris & kolom harus sama persis dengan angka target di pinggirnya."
+            : "Tiap huruf mewakili satu angka (0-9) yang nilainya tetap sama di semua kemunculannya, dan huruf beda harus angka beda. Isi digitnya supaya hasil penjumlahannya benar."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CryptarithmInput({
+  puzzle,
+  values,
+  onCellChange,
+}: {
+  puzzle: PuzzlePayload;
+  values: Record<string, string>;
+  onCellChange: (key: string, raw: string) => void;
+}) {
+  const words = puzzle.words ?? [];
+  const addends = words.slice(0, -1);
+  const result = words[words.length - 1];
+
+  return (
+    <div className="flex w-full max-w-sm flex-col items-center gap-6">
+      <div className="flex flex-col items-end gap-1 font-mono text-2xl font-bold tracking-widest text-black dark:text-zinc-50">
+        {addends.map((w, i) => (
+          <span key={i}>
+            {i > 0 ? "+ " : ""}
+            {w}
+          </span>
+        ))}
+        <span className="w-full border-t-2 border-black/20 pt-1 text-right dark:border-white/20">{result}</span>
+      </div>
+
+      <div className="flex flex-wrap justify-center gap-2">
+        {puzzle.blankKeys.map((letter) => (
+          <div key={letter} className="flex flex-col items-center gap-1">
+            <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-500">{letter}</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={values[letter] ?? ""}
+              onChange={(e) => onCellChange(letter, e.target.value.replace(/[^0-9]/g, "").slice(0, 1))}
+              className="h-12 w-12 rounded-lg border-2 border-blue-400 bg-white text-center text-xl font-bold text-blue-700 outline-none focus:border-blue-600 dark:bg-zinc-900 dark:text-blue-400"
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

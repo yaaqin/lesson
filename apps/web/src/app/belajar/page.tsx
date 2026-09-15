@@ -11,6 +11,7 @@ const TIER_ICON: Record<string, string> = {
   sd: "➕",
   smp: "📐",
   smk: "📊",
+  umum: "🧩",
 };
 
 export default function TierPickerPage() {

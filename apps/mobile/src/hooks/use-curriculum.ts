@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { publicApi, privateApi } from "@/lib/http";
 
-export type Tier = { id: string; code: string; name: string };
+export type Tier = { id: string; code: string; name: string; usesBatch: boolean };
 export type Batch = { id: string; name: string };
+export type Category = { id: string; code: string; name: string };
 
 export type ChallengeListItem = {
   id: string;
@@ -15,14 +16,29 @@ export type ChallengeListItem = {
   hasEssay: boolean;
 };
 
-export type QuestionType = "multiple_choice" | "essay_numeric";
+export type QuestionType = "multiple_choice" | "essay_numeric" | "grid_puzzle";
 export type QuestionOption = { value: number; isCorrect: boolean };
+
+// PuzzlePayload: bentuk publik puzzle (grid_puzzle) -- gak pernah bawa solusi,
+// cuma given + blankKeys yang harus diisi user. Lihat services/api
+// internal/curriculumsvc/types.go (PuzzlePayload) buat kontrak lengkapnya.
+export type PuzzlePayload = {
+  kind: "addition_grid" | "cryptarithm";
+  size?: number;
+  words?: string[];
+  given?: Record<string, number>;
+  blankKeys: string[];
+  rowSums?: number[];
+  colSums?: number[];
+};
+
 export type SessionQuestion = {
   id: string;
   type: QuestionType;
   prompt: string;
   options?: QuestionOption[];
   correctAnswerValue?: number;
+  puzzle?: PuzzlePayload;
 };
 
 export type StartResult = {
@@ -34,7 +50,11 @@ export type StartResult = {
   questions: SessionQuestion[];
 };
 
-export type SubmitAnswer = { questionId: string; selectedValue: number | null };
+export type SubmitAnswer = {
+  questionId: string;
+  selectedValue: number | null;
+  selectedGrid?: Record<string, number>;
+};
 
 export type SubmitResult = {
   scorePercent: number;
@@ -79,6 +99,23 @@ export function useChallengesQuery(batchId: string | undefined) {
   });
 }
 
+export function useCategoriesQuery(tierCode: string) {
+  return useQuery({
+    queryKey: ["categories", tierCode],
+    queryFn: async () => (await publicApi.get<Category[]>(`/app/tiers/${tierCode}/categories`)).data,
+    enabled: !!tierCode,
+  });
+}
+
+export function useChallengesByCategoryQuery(categoryId: string | undefined) {
+  return useQuery({
+    queryKey: ["challenges-by-category", categoryId],
+    queryFn: async () =>
+      (await privateApi.get<ChallengeListItem[]>(`/app/categories/${categoryId}/challenges`)).data,
+    enabled: !!categoryId,
+  });
+}
+
 export function useMeQuery() {
   return useQuery({
     queryKey: ["me"],
@@ -120,6 +157,7 @@ export function useSubmitAttemptMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
       queryClient.invalidateQueries({ queryKey: ["challenges"] });
+      queryClient.invalidateQueries({ queryKey: ["challenges-by-category"] });
     },
   });
 }

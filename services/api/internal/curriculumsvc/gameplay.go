@@ -16,7 +16,9 @@ type bankQuestion struct {
 	Type               string
 	Prompt             string
 	Options            []QuestionOption
-	CorrectAnswerValue float64
+	CorrectAnswerValue *float64
+	Puzzle             *PuzzlePayload
+	PuzzleSolution     map[string]float64
 }
 
 // StartChallenge = "gacha fetch": pastiin nyawa cukup, ambil seluruh bank soal
@@ -65,18 +67,22 @@ func (s *Service) StartChallenge(ctx context.Context, userID, challengeID string
 	snapshot := make([]snapshotQuestion, len(picked))
 	questions := make([]SessionQuestion, len(picked))
 	for i, q := range picked {
-		if q.Type == QuestionTypeEssayNumeric {
-			correct := q.CorrectAnswerValue
-			snapshot[i] = snapshotQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, CorrectAnswerValue: &correct}
-			questions[i] = SessionQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, CorrectAnswerValue: &correct}
-			continue
+		switch q.Type {
+		case QuestionTypeEssayNumeric:
+			snapshot[i] = snapshotQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, CorrectAnswerValue: q.CorrectAnswerValue}
+			questions[i] = SessionQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, CorrectAnswerValue: q.CorrectAnswerValue}
+
+		case QuestionTypeGridPuzzle:
+			snapshot[i] = snapshotQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Puzzle: q.Puzzle, PuzzleSolution: q.PuzzleSolution}
+			questions[i] = SessionQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Puzzle: q.Puzzle}
+
+		default:
+			opts := append([]QuestionOption{}, q.Options...)
+			rand.Shuffle(len(opts), func(a, b int) { opts[a], opts[b] = opts[b], opts[a] })
+
+			snapshot[i] = snapshotQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Options: opts}
+			questions[i] = SessionQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Options: opts}
 		}
-
-		opts := append([]QuestionOption{}, q.Options...)
-		rand.Shuffle(len(opts), func(a, b int) { opts[a], opts[b] = opts[b], opts[a] })
-
-		snapshot[i] = snapshotQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Options: opts}
-		questions[i] = SessionQuestion{ID: q.ID, Type: q.Type, Prompt: q.Prompt, Options: opts}
 	}
 
 	snapshotJSON, err := json.Marshal(snapshot)
@@ -104,14 +110,19 @@ func (s *Service) StartChallenge(ctx context.Context, userID, challengeID string
 	}, nil
 }
 
-// loadPublishedBank ambil semua soal published, MC maupun essay. LEFT JOIN
-// (bukan INNER) karena soal essay_numeric gak punya baris question_options
-// sama sekali -- INNER JOIN bakal diam-diam ngilangin soal essay dari bank.
+// loadPublishedBank ambil semua soal published, MC/essay/grid_puzzle. LEFT
+// JOIN (bukan INNER) buat question_options & puzzle_questions karena essay
+// gak punya baris question_options, grid_puzzle gak punya baris keduanya --
+// INNER JOIN bakal diam-diam ngilangin soal-soal itu dari bank.
 func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]bankQuestion, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT q.id, q.question_type, q.prompt, q.correct_answer_value, qo.option_value, qo.is_correct
+		SELECT
+			q.id, q.question_type, q.prompt, q.correct_answer_value,
+			qo.option_value, qo.is_correct,
+			pq.kind, pq.payload
 		FROM questions q
 		LEFT JOIN question_options qo ON qo.question_id = q.id
+		LEFT JOIN puzzle_questions pq ON pq.question_id = q.id
 		WHERE q.challenge_id = $1 AND q.status = 'published'
 		ORDER BY q.id
 	`, challengeID)
@@ -125,16 +136,26 @@ func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]
 	for rows.Next() {
 		var (
 			qID, qType, prompt string
-			correctAnswer      float64
+			correctAnswer      *float64
 			optValue           *float64
 			isCorrect          *bool
+			puzzleKind         *string
+			puzzlePayloadRaw   []byte
 		)
-		if err := rows.Scan(&qID, &qType, &prompt, &correctAnswer, &optValue, &isCorrect); err != nil {
+		if err := rows.Scan(&qID, &qType, &prompt, &correctAnswer, &optValue, &isCorrect, &puzzleKind, &puzzlePayloadRaw); err != nil {
 			return nil, err
 		}
 		q, ok := byID[qID]
 		if !ok {
 			q = &bankQuestion{ID: qID, Type: qType, Prompt: prompt, CorrectAnswerValue: correctAnswer}
+			if puzzleKind != nil {
+				puzzle, solution, err := derivePuzzle(*puzzleKind, puzzlePayloadRaw)
+				if err != nil {
+					return nil, err
+				}
+				q.Puzzle = puzzle
+				q.PuzzleSolution = solution
+			}
 			byID[qID] = q
 			order = append(order, qID)
 		}
@@ -190,16 +211,37 @@ func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, a
 	}
 
 	selectedByQuestion := make(map[string]float64, len(answers))
-	answeredByQuestion := make(map[string]bool, len(answers))
+	selectedGridByQuestion := make(map[string]map[string]float64, len(answers))
 	for _, a := range answers {
 		if a.SelectedValue != nil {
 			selectedByQuestion[a.QuestionID] = *a.SelectedValue
-			answeredByQuestion[a.QuestionID] = true
+		}
+		if a.SelectedGrid != nil {
+			selectedGridByQuestion[a.QuestionID] = a.SelectedGrid
 		}
 	}
 
 	correctCount := 0
 	for _, q := range snapshot {
+		if q.Type == QuestionTypeGridPuzzle {
+			grid, answered := selectedGridByQuestion[q.ID]
+			if !answered || len(q.PuzzleSolution) == 0 {
+				continue
+			}
+			allMatch := true
+			for key, want := range q.PuzzleSolution {
+				got, ok := grid[key]
+				if !ok || !floatEquals(want, got) {
+					allMatch = false
+					break
+				}
+			}
+			if allMatch {
+				correctCount++
+			}
+			continue
+		}
+
 		selected, answered := selectedByQuestion[q.ID]
 		if !answered {
 			continue

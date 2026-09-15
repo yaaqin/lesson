@@ -2,10 +2,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useColorScheme,
   type ColorSchemeName,
@@ -17,6 +19,7 @@ import {
   useMeQuery,
   useStartChallengeMutation,
   useSubmitAttemptMutation,
+  type PuzzlePayload,
   type StartResult,
   type SubmitResult,
 } from "@/hooks/use-curriculum";
@@ -43,6 +46,7 @@ export default function ChallengeScreen() {
   const [game, setGame] = useState<StartResult | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [gridAnswers, setGridAnswers] = useState<Record<string, Record<string, number>>>({});
   const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -58,6 +62,7 @@ export default function ChallengeScreen() {
     setPhase("loading");
     setCurrentIndex(0);
     setAnswers({});
+    setGridAnswers({});
     setEssayDrafts({});
     setSelected(null);
     setResult(null);
@@ -88,12 +93,13 @@ export default function ChallengeScreen() {
   }, [params.challengeId, beginAttempt]);
 
   const submitWithAnswers = useCallback(
-    (finalAnswers: Record<string, number>) => {
+    (finalAnswers: Record<string, number>, finalGridAnswers: Record<string, Record<string, number>>) => {
       if (!game || submittingRef.current) return;
       submittingRef.current = true;
       const payload = game.questions.map((q) => ({
         questionId: q.id,
         selectedValue: finalAnswers[q.id] ?? null,
+        selectedGrid: finalGridAnswers[q.id],
       }));
       submitMutation.mutate(
         { attemptId: game.attemptId, answers: payload },
@@ -120,12 +126,33 @@ export default function ChallengeScreen() {
       const nextIndex = currentIndex + 1;
       setCurrentIndex(nextIndex);
       if (nextIndex >= game.questions.length) {
-        submitWithAnswers(finalAnswers);
+        submitWithAnswers(finalAnswers, gridAnswers);
       } else {
         setTimeLeft(game.timeLimitSeconds);
       }
     },
-    [game, currentIndex, answers, submitWithAnswers],
+    [game, currentIndex, answers, gridAnswers, submitWithAnswers],
+  );
+
+  // grid_puzzle (kotak addition / cryptarithm): submit sekali per puzzle (gak
+  // ada auto-advance kayak MC/essay karena challenge puzzle selalu cuma 1 soal),
+  // lanjutannya sama kayak advanceRegular -- geser currentIndex, submit kalau abis.
+  const handleAnswerPuzzle = useCallback(
+    (grid: Record<string, number>) => {
+      if (!game) return;
+      const q = game.questions[currentIndex];
+      const finalGridAnswers = { ...gridAnswers, [q.id]: grid };
+      setGridAnswers(finalGridAnswers);
+
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      if (nextIndex >= game.questions.length) {
+        submitWithAnswers(answers, finalGridAnswers);
+      } else {
+        setTimeLeft(game.timeLimitSeconds);
+      }
+    },
+    [game, currentIndex, answers, gridAnswers, submitWithAnswers],
   );
 
   // Timer per soal (challenge biasa)
@@ -143,12 +170,12 @@ export default function ChallengeScreen() {
   useEffect(() => {
     if (phase !== "playing" || !game || !game.isExam) return;
     if (timeLeft <= 0) {
-      const id = setTimeout(() => submitWithAnswers(answers), 0);
+      const id = setTimeout(() => submitWithAnswers(answers, gridAnswers), 0);
       return () => clearTimeout(id);
     }
     const timer = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
     return () => clearTimeout(timer);
-  }, [timeLeft, phase, game, answers, submitWithAnswers]);
+  }, [timeLeft, phase, game, answers, gridAnswers, submitWithAnswers]);
 
   const handleAnswerRegular = (value: number) => {
     if (selected !== null) return;
@@ -225,7 +252,7 @@ export default function ChallengeScreen() {
             onEssayChange={handleEssayDraftChange}
             timeLeft={timeLeft}
             onAnswer={handleAnswerExam}
-            onFinish={() => submitWithAnswers(answers)}
+            onFinish={() => submitWithAnswers(answers, gridAnswers)}
           />
         )}
 
@@ -240,6 +267,7 @@ export default function ChallengeScreen() {
             timeLeft={timeLeft}
             selected={selected}
             onAnswer={handleAnswerRegular}
+            onAnswerPuzzle={handleAnswerPuzzle}
           />
         )}
 
@@ -262,6 +290,7 @@ export default function ChallengeScreen() {
             onRetry={retry}
             questions={game.questions}
             answers={answers}
+            gridAnswers={gridAnswers}
           />
         )}
       </ScrollView>
@@ -278,6 +307,7 @@ function RegularView({
   timeLeft,
   selected,
   onAnswer,
+  onAnswerPuzzle,
 }: {
   theme: Theme;
   scheme: ColorSchemeName;
@@ -287,9 +317,12 @@ function RegularView({
   timeLeft: number;
   selected: number | null;
   onAnswer: (value: number) => void;
+  onAnswerPuzzle: (grid: Record<string, number>) => void;
 }) {
   const [essayValue, setEssayValue] = useState("");
+  const [showPuzzleInfo, setShowPuzzleInfo] = useState(false);
   const isEssay = currentQuestion.type === "essay_numeric";
+  const isPuzzle = currentQuestion.type === "grid_puzzle";
 
   const submitEssay = () => {
     if (selected !== null || essayValue === "" || essayValue === "-") return;
@@ -336,10 +369,44 @@ function RegularView({
             </Text>
           </View>
         )}
-        <Text style={[styles.questionText, { color: theme.text }]}>{currentQuestion.prompt}</Text>
+        {isPuzzle && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={[styles.pill, { backgroundColor: Palette.purpleBg }]}>
+              <Text style={{ color: Palette.purple, fontSize: 11, fontWeight: "700" }}>🧩 Puzzle</Text>
+            </View>
+            <Pressable
+              onPress={() => setShowPuzzleInfo(true)}
+              hitSlop={8}
+              style={[styles.infoButton, { borderColor: Palette.purple }]}
+            >
+              <Text style={{ color: Palette.purple, fontSize: 12, fontWeight: "800" }}>?</Text>
+            </Pressable>
+          </View>
+        )}
+        <Text
+          style={
+            isPuzzle
+              ? { color: theme.textSecondary, fontSize: 15, textAlign: "center" }
+              : [styles.questionText, { color: theme.text }]
+          }
+        >
+          {currentQuestion.prompt}
+        </Text>
       </View>
 
-      {isEssay ? (
+      {isPuzzle && currentQuestion.puzzle && (
+        <PuzzleInfoModal
+          theme={theme}
+          scheme={scheme}
+          visible={showPuzzleInfo}
+          kind={currentQuestion.puzzle.kind}
+          onClose={() => setShowPuzzleInfo(false)}
+        />
+      )}
+
+      {isPuzzle && currentQuestion.puzzle ? (
+        <PuzzleAnswerView theme={theme} scheme={scheme} puzzle={currentQuestion.puzzle} onSubmit={onAnswerPuzzle} />
+      ) : isEssay ? (
         <View style={{ alignItems: "center" }}>
           <NumericKeypad
             theme={theme}
@@ -546,6 +613,7 @@ function ResultView({
   onRetry,
   questions,
   answers,
+  gridAnswers,
 }: {
   theme: Theme;
   scheme: ColorSchemeName;
@@ -558,6 +626,7 @@ function ResultView({
   onRetry: () => void;
   questions: StartResult["questions"];
   answers: Record<string, number>;
+  gridAnswers: Record<string, Record<string, number>>;
 }) {
   return (
     <View style={{ alignItems: "center", gap: 20, paddingVertical: 16 }}>
@@ -618,6 +687,23 @@ function ResultView({
 
       <View style={{ width: "100%", gap: 8 }}>
         {questions.map((q, idx) => {
+          if (q.type === "grid_puzzle") {
+            // Solusi puzzle sengaja gak pernah dikirim ke klien (lihat PuzzlePayload),
+            // jadi benar/salahnya dibaca dari `passed` -- challenge puzzle selalu cuma
+            // 1 soal & lulus minimal 100%, jadi passed = puzzle ini bener persis.
+            const attempted = !!gridAnswers[q.id];
+            return (
+              <View key={q.id} style={[styles.breakdownRow, { backgroundColor: theme.backgroundElement }]}>
+                <Text style={{ color: theme.textSecondary, fontSize: 13, flex: 1 }}>
+                  {idx + 1}. {q.prompt}
+                </Text>
+                <Text style={{ color: passed ? Palette.green : Palette.red, fontSize: 13, fontWeight: "700" }}>
+                  {attempted ? (passed ? "Benar ✓" : "Belum tepat ✗") : "— ✗"}
+                </Text>
+              </View>
+            );
+          }
+
           const selectedValue = answers[q.id];
           const correctValue =
             q.type === "essay_numeric" ? q.correctAnswerValue : q.options?.find((o) => o.isCorrect)?.value;
@@ -742,6 +828,316 @@ function NumericKeypad({
   );
 }
 
+// PuzzleAnswerView: soal grid_puzzle selalu satu-satunya soal di sesi (lihat
+// seed-puzzle), jadi gak ada auto-advance kayak MC/essay -- cuma satu tombol
+// "Jawab" yang aktif begitu semua sel/huruf keisi, langsung submit ke server
+// (solusinya emang gak pernah ada di klien buat dicek sendiri -- PuzzlePayload
+// sengaja gak bawa itu). Port 1:1 dari apps/web.
+function PuzzleAnswerView({
+  theme,
+  scheme,
+  puzzle,
+  onSubmit,
+}: {
+  theme: Theme;
+  scheme: ColorSchemeName;
+  puzzle: PuzzlePayload;
+  onSubmit: (grid: Record<string, number>) => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [pickerKey, setPickerKey] = useState<string | null>(null);
+
+  const setCell = (key: string, raw: string) => {
+    setValues((prev) => ({ ...prev, [key]: raw }));
+  };
+
+  const allFilled = puzzle.blankKeys.every((key) => values[key] !== undefined && values[key] !== "");
+
+  const submit = () => {
+    if (!allFilled) return;
+    const grid: Record<string, number> = {};
+    for (const key of puzzle.blankKeys) {
+      grid[key] = Number(values[key]);
+    }
+    onSubmit(grid);
+  };
+
+  return (
+    <View style={{ alignItems: "center", gap: 20 }}>
+      {puzzle.kind === "addition_grid" ? (
+        <AdditionGridInput theme={theme} scheme={scheme} puzzle={puzzle} values={values} onOpenPicker={setPickerKey} />
+      ) : (
+        <CryptarithmInput theme={theme} scheme={scheme} puzzle={puzzle} values={values} onCellChange={setCell} />
+      )}
+      <Pressable
+        disabled={!allFilled}
+        onPress={submit}
+        style={[styles.wideButton, { backgroundColor: Palette.blue, opacity: allFilled ? 1 : 0.4, width: "100%", maxWidth: 320 }]}
+      >
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Jawab</Text>
+      </Pressable>
+
+      {puzzle.kind === "addition_grid" && (
+        <NumberPickerModal
+          theme={theme}
+          scheme={scheme}
+          visible={pickerKey !== null}
+          max={(puzzle.size ?? 3) * (puzzle.size ?? 3)}
+          given={puzzle.given}
+          values={values}
+          pickerKey={pickerKey}
+          onPick={(n) => {
+            if (!pickerKey) return;
+            setCell(pickerKey, String(n));
+            setPickerKey(null);
+          }}
+          onClear={() => {
+            if (!pickerKey) return;
+            setCell(pickerKey, "");
+            setPickerKey(null);
+          }}
+          onClose={() => setPickerKey(null)}
+        />
+      )}
+    </View>
+  );
+}
+
+// AdditionGridInput: kotak kosong sekarang tombol (bukan TextInput) -- tap
+// buka popup NumberPickerModal, angka yang udah kepake di kotak lain otomatis
+// disable di situ, jadi gak bisa gak sengaja masukin angka dobel (lihat
+// curriculumsvc/puzzle.go -- solusinya harus tiap angka 1..N² dipakai tepat sekali).
+function AdditionGridInput({
+  theme,
+  scheme,
+  puzzle,
+  values,
+  onOpenPicker,
+}: {
+  theme: Theme;
+  scheme: ColorSchemeName;
+  puzzle: PuzzlePayload;
+  values: Record<string, string>;
+  onOpenPicker: (key: string) => void;
+}) {
+  const size = puzzle.size ?? 3;
+  const cellPx = size >= 5 ? 44 : size === 4 ? 52 : 60;
+  const fontSize = size >= 5 ? 15 : 20;
+  const borderColor = scheme === "dark" ? Palette.borderDark : Palette.border;
+
+  const rows = Array.from({ length: size }, (_, r) => r);
+  const cols = Array.from({ length: size }, (_, c) => c);
+
+  return (
+    <View style={{ gap: 6 }}>
+      {rows.map((r) => (
+        <View key={`row-${r}`} style={{ flexDirection: "row", gap: 6 }}>
+          {cols.map((c) => {
+            const key = `r${r}c${c}`;
+            const given = puzzle.given?.[key];
+            if (given !== undefined) {
+              return (
+                <View
+                  key={key}
+                  style={[
+                    styles.gridCell,
+                    { width: cellPx, height: cellPx, backgroundColor: theme.backgroundSelected, borderColor },
+                  ]}
+                >
+                  <Text style={{ color: theme.text, fontWeight: "800", fontSize }}>{given}</Text>
+                </View>
+              );
+            }
+            return (
+              <Pressable
+                key={key}
+                onPress={() => onOpenPicker(key)}
+                style={[
+                  styles.gridCell,
+                  { width: cellPx, height: cellPx, borderColor: Palette.blue },
+                ]}
+              >
+                <Text style={{ color: Palette.blue, fontWeight: "800", fontSize }}>{values[key] ?? ""}</Text>
+              </Pressable>
+            );
+          })}
+          <View style={[styles.gridSumCell, { width: cellPx, height: cellPx }]}>
+            <Text style={{ color: Palette.amber, fontWeight: "700", fontSize: 12 }}>{puzzle.rowSums?.[r]}</Text>
+          </View>
+        </View>
+      ))}
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        {cols.map((c) => (
+          <View key={`colsum-${c}`} style={[styles.gridSumCell, { width: cellPx, height: cellPx }]}>
+            <Text style={{ color: Palette.amber, fontWeight: "700", fontSize: 12 }}>{puzzle.colSums?.[c]}</Text>
+          </View>
+        ))}
+        <View style={{ width: cellPx, height: cellPx }} />
+      </View>
+    </View>
+  );
+}
+
+// NumberPickerModal: popup keypad angka buat isi 1 kotak addition_grid --
+// muncul begitu kotak kosong di-tap, ada tombol close (✕) eksplisit karena di
+// mobile gak ada tempat buat keypad nempel permanen kayak di web.
+function NumberPickerModal({
+  theme,
+  scheme,
+  visible,
+  max,
+  given,
+  values,
+  pickerKey,
+  onPick,
+  onClear,
+  onClose,
+}: {
+  theme: Theme;
+  scheme: ColorSchemeName;
+  visible: boolean;
+  max: number;
+  given: Record<string, number> | undefined;
+  values: Record<string, string>;
+  pickerKey: string | null;
+  onPick: (n: number) => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const usedNumbers = new Set<number>();
+  for (const v of Object.values(given ?? {})) usedNumbers.add(v);
+  for (const [key, raw] of Object.entries(values)) {
+    if (key === pickerKey || raw === "") continue;
+    usedNumbers.add(Number(raw));
+  }
+  const borderColor = scheme === "dark" ? Palette.borderDark : Palette.border;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={[styles.modalCard, { backgroundColor: theme.background }]} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHeader}>
+            <Text style={{ color: theme.text, fontWeight: "700", fontSize: 14 }}>Pilih angka</Text>
+            <Pressable onPress={onClose} hitSlop={8} style={[styles.modalCloseButton, { backgroundColor: theme.backgroundElement }]}>
+              <Text style={{ color: theme.textSecondary, fontSize: 15, fontWeight: "700" }}>✕</Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+            {Array.from({ length: max }, (_, i) => i + 1).map((n) => {
+              const disabled = usedNumbers.has(n);
+              return (
+                <Pressable
+                  key={n}
+                  disabled={disabled}
+                  onPress={() => onPick(n)}
+                  style={[styles.numberPickerButton, { borderColor: Palette.blue, opacity: disabled ? 0.3 : 1 }]}
+                >
+                  <Text style={{ color: Palette.blue, fontWeight: "700", fontSize: 16 }}>{n}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable
+            onPress={onClear}
+            style={[styles.keypadActionButton, { borderWidth: 1, borderColor, marginTop: 4 }]}
+          >
+            <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: "600" }}>⌫ Hapus</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// PuzzleInfoModal: penjelasan aturan main, dibuka lewat tombol "?" di sebelah
+// pill "🧩 Puzzle" -- popup dengan tombol close eksplisit (bukan cuma tap
+// backdrop) biar jelas buat user yang belum tau caranya nutup modal.
+function PuzzleInfoModal({
+  theme,
+  scheme,
+  visible,
+  kind,
+  onClose,
+}: {
+  theme: Theme;
+  scheme: ColorSchemeName;
+  visible: boolean;
+  kind: PuzzlePayload["kind"];
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={[styles.modalCard, { backgroundColor: theme.background }]} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHeader}>
+            <Text style={{ color: theme.text, fontWeight: "700", fontSize: 14 }}>Cara main</Text>
+            <Pressable onPress={onClose} hitSlop={8} style={[styles.modalCloseButton, { backgroundColor: theme.backgroundElement }]}>
+              <Text style={{ color: theme.textSecondary, fontSize: 15, fontWeight: "700" }}>✕</Text>
+            </Pressable>
+          </View>
+          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+            {kind === "addition_grid"
+              ? "Isi tiap kotak kosong dengan angka 1 sampai jumlah kotaknya (misal 1-9 buat kotak 3x3) -- setiap angka cuma boleh dipakai TEPAT SEKALI di seluruh kotak, gak boleh ada yang dobel. Ketuk kotak kosong buat munculin pilihan angka -- angka yang udah kepake otomatis kekunci biar gak salah pilih. Jumlah angka di tiap baris & kolom harus sama persis dengan angka target di pinggirnya."
+              : "Tiap huruf mewakili satu angka (0-9) yang nilainya tetap sama di semua kemunculannya, dan huruf beda harus angka beda. Isi digitnya supaya hasil penjumlahannya benar."}
+          </Text>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function CryptarithmInput({
+  theme,
+  scheme,
+  puzzle,
+  values,
+  onCellChange,
+}: {
+  theme: Theme;
+  scheme: ColorSchemeName;
+  puzzle: PuzzlePayload;
+  values: Record<string, string>;
+  onCellChange: (key: string, raw: string) => void;
+}) {
+  const words = puzzle.words ?? [];
+  const addends = words.slice(0, -1);
+  const result = words[words.length - 1];
+  const borderColor = scheme === "dark" ? Palette.borderDark : Palette.border;
+
+  return (
+    <View style={{ width: "100%", maxWidth: 320, alignItems: "center", gap: 20 }}>
+      <View style={{ alignItems: "flex-end", gap: 2 }}>
+        {addends.map((w, i) => (
+          <Text key={i} style={{ color: theme.text, fontWeight: "800", fontSize: 22, letterSpacing: 3 }}>
+            {i > 0 ? "+ " : ""}
+            {w}
+          </Text>
+        ))}
+        <View style={{ borderTopWidth: 2, borderColor, width: "100%", paddingTop: 4 }}>
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 22, letterSpacing: 3, textAlign: "right" }}>
+            {result}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
+        {puzzle.blankKeys.map((letter) => (
+          <View key={letter} style={{ alignItems: "center", gap: 4 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: "700" }}>{letter}</Text>
+            <TextInput
+              value={values[letter] ?? ""}
+              onChangeText={(t) => onCellChange(letter, t.replace(/[^0-9]/g, "").slice(0, 1))}
+              keyboardType="number-pad"
+              maxLength={1}
+              style={[styles.letterCell, { borderColor: Palette.blue, color: Palette.blue }]}
+            />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, padding: 24 },
@@ -768,4 +1164,21 @@ const styles = StyleSheet.create({
   keypadGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   keypadButton: { flexBasis: "30%", flexGrow: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
   keypadActionButton: { borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  gridCell: { borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  gridSumCell: { borderRadius: 10, backgroundColor: Palette.amberBg, alignItems: "center", justifyContent: "center" },
+  letterCell: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 2,
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  infoButton: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalCard: { width: "100%", maxWidth: 340, borderRadius: 20, padding: 20, gap: 14 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  modalCloseButton: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  numberPickerButton: { width: 44, height: 44, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
 });

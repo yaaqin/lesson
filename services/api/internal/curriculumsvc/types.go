@@ -3,13 +3,22 @@ package curriculumsvc
 // --- Read (userApp) ---
 
 type Tier struct {
-	ID   string `json:"id"`
-	Code string `json:"code"`
-	Name string `json:"name"`
+	ID        string `json:"id"`
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	UsesBatch bool   `json:"usesBatch"`
 }
 
 type Batch struct {
 	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Category: ganti batch buat tier yang uses_batch = false (mis. "umum"),
+// ngelompokin challenge yang strukturnya beda-beda kayak puzzle (FSD.md 3.3).
+type Category struct {
+	ID   string `json:"id"`
+	Code string `json:"code"`
 	Name string `json:"name"`
 }
 
@@ -29,6 +38,7 @@ type ChallengeListItem struct {
 const (
 	QuestionTypeMultipleChoice = "multiple_choice"
 	QuestionTypeEssayNumeric   = "essay_numeric"
+	QuestionTypeGridPuzzle     = "grid_puzzle"
 )
 
 type QuestionOption struct {
@@ -36,27 +46,51 @@ type QuestionOption struct {
 	IsCorrect bool    `json:"isCorrect"`
 }
 
+// PuzzlePayload: bentuk publik puzzle (grid_puzzle) yang dikirim ke klien.
+// Kind nentuin gimana klien nge-render ("addition_grid" -> kotak NxN angka,
+// "cryptarithm" -> persamaan huruf). Given = sel/huruf yang udah kekasih tau
+// nilainya (key "r{i}c{j}" buat grid, huruf itu sendiri buat cryptarithm).
+// BlankKeys = key yang harus diisi user. RowSums/ColSums cuma kepake buat
+// addition_grid. SENGAJA gak ada field solusi di sini -- solusinya cuma ada di
+// snapshotQuestion (server-side), dicek pas SubmitAttempt.
+type PuzzlePayload struct {
+	Kind      string             `json:"kind"`
+	Size      int                `json:"size,omitempty"`
+	Words     []string           `json:"words,omitempty"`
+	Given     map[string]float64 `json:"given,omitempty"`
+	BlankKeys []string           `json:"blankKeys"`
+	RowSums   []float64          `json:"rowSums,omitempty"`
+	ColSums   []float64          `json:"colSums,omitempty"`
+}
+
 // SessionQuestion: buat multiple_choice, Options keisi & CorrectAnswerValue
 // nil. Buat essay_numeric, Options kosong & CorrectAnswerValue keisi -- klien
 // yang nampilin keypad angka & ngecek sendiri kebenarannya (simplifikasi yang
-// sama kayak MC yang juga nampilin options[].isCorrect ke klien).
+// sama kayak MC yang juga nampilin options[].isCorrect ke klien). Buat
+// grid_puzzle, Puzzle keisi (tanpa solusi -- lihat PuzzlePayload).
 type SessionQuestion struct {
 	ID                 string           `json:"id"`
 	Type               string           `json:"type"`
 	Prompt             string           `json:"prompt"`
 	Options            []QuestionOption `json:"options,omitempty"`
 	CorrectAnswerValue *float64         `json:"correctAnswerValue,omitempty"`
+	Puzzle             *PuzzlePayload   `json:"puzzle,omitempty"`
 }
 
 // snapshotQuestion sama isinya dengan SessionQuestion, dipisah tipe biar
 // perubahan format JSON respons API gak otomatis mengubah format snapshot
-// yang sudah tersimpan di kolom questions_snapshot milik attempt lama.
+// yang sudah tersimpan di kolom questions_snapshot milik attempt lama. Beda
+// dari SessionQuestion, di sini ADA PuzzleSolution -- solusi grid_puzzle,
+// dipakai SubmitAttempt buat nyocokin jawaban, gak pernah ikut ke-marshal ke
+// respons StartChallenge karena SessionQuestion gak punya field ini.
 type snapshotQuestion struct {
-	ID                 string           `json:"id"`
-	Type               string           `json:"type"`
-	Prompt             string           `json:"prompt"`
-	Options            []QuestionOption `json:"options,omitempty"`
-	CorrectAnswerValue *float64         `json:"correctAnswerValue,omitempty"`
+	ID                 string             `json:"id"`
+	Type               string             `json:"type"`
+	Prompt             string             `json:"prompt"`
+	Options            []QuestionOption   `json:"options,omitempty"`
+	CorrectAnswerValue *float64           `json:"correctAnswerValue,omitempty"`
+	Puzzle             *PuzzlePayload     `json:"puzzle,omitempty"`
+	PuzzleSolution     map[string]float64 `json:"puzzleSolution,omitempty"`
 }
 
 type StartResult struct {
@@ -69,8 +103,9 @@ type StartResult struct {
 }
 
 type SubmitAnswer struct {
-	QuestionID    string   `json:"questionId"`
-	SelectedValue *float64 `json:"selectedValue"`
+	QuestionID    string             `json:"questionId"`
+	SelectedValue *float64           `json:"selectedValue"`
+	SelectedGrid  map[string]float64 `json:"selectedGrid,omitempty"`
 }
 
 type SubmitResult struct {

@@ -3,7 +3,13 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useCo
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/theme";
 import { Palette } from "@/constants/palette";
-import { useBatchesQuery, useChallengesQuery, useMeQuery } from "@/hooks/use-curriculum";
+import {
+  useBatchesQuery,
+  useCategoriesQuery,
+  useChallengesQuery,
+  useMeQuery,
+  useTiersQuery,
+} from "@/hooks/use-curriculum";
 
 export default function TierBatchScreen() {
   const scheme = useColorScheme();
@@ -11,9 +17,15 @@ export default function TierBatchScreen() {
   const { tierCode } = useLocalSearchParams<{ tierCode: string }>();
 
   const meQuery = useMeQuery();
+  const tiersQuery = useTiersQuery();
+  const tier = tiersQuery.data?.find((t) => t.code === tierCode);
+  const usesBatch = tier?.usesBatch ?? true;
+
   const batchesQuery = useBatchesQuery(tierCode);
   const batch = batchesQuery.data?.[0];
-  const challengesQuery = useChallengesQuery(batch?.id);
+  const challengesQuery = useChallengesQuery(usesBatch ? batch?.id : undefined);
+
+  const categoriesQuery = useCategoriesQuery(!usesBatch ? tierCode : "");
 
   const lives = meQuery.data?.livesRemaining ?? 0;
   const streak = meQuery.data?.currentStreak ?? 0;
@@ -32,62 +44,91 @@ export default function TierBatchScreen() {
       </View>
 
       <Text style={[styles.title, { color: theme.text }]}>
-        {tierCode?.toUpperCase()} {batch ? `· ${batch.name}` : ""}
+        {tier?.name ?? tierCode?.toUpperCase()} {usesBatch && batch ? `· ${batch.name}` : ""}
       </Text>
 
-      {challengesQuery.isLoading && <ActivityIndicator style={{ marginTop: 24 }} />}
+      {usesBatch ? (
+        <>
+          {challengesQuery.isLoading && <ActivityIndicator style={{ marginTop: 24 }} />}
 
-      <ScrollView contentContainerStyle={styles.list}>
-        {challengesQuery.data?.map((challenge, index) => (
-          <Pressable
-            key={challenge.id}
-            onPress={() => router.push(`/belajar/${tierCode}/${challenge.id}`)}
-            style={[
-              styles.card,
-              {
-                borderColor: scheme === "dark" ? Palette.borderDark : Palette.border,
-                backgroundColor: theme.backgroundElement,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.badgeCircle,
-                { backgroundColor: challenge.isExam ? Palette.amber : Palette.blue },
-              ]}
-            >
-              <Text style={styles.badgeCircleText}>{challenge.isExam ? "🏁" : index + 1}</Text>
-            </View>
+          <ScrollView contentContainerStyle={styles.list}>
+            {challengesQuery.data?.map((challenge, index) => (
+              <Pressable
+                key={challenge.id}
+                onPress={() => router.push(`/belajar/${tierCode}/${challenge.id}`)}
+                style={[
+                  styles.card,
+                  {
+                    borderColor: scheme === "dark" ? Palette.borderDark : Palette.border,
+                    backgroundColor: theme.backgroundElement,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.badgeCircle,
+                    { backgroundColor: challenge.isExam ? Palette.amber : Palette.blue },
+                  ]}
+                >
+                  <Text style={styles.badgeCircleText}>{challenge.isExam ? "🏁" : index + 1}</Text>
+                </View>
 
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>{challenge.name}</Text>
-                {challenge.hasEssay && (
-                  <View style={[styles.pill, { backgroundColor: Palette.purpleBg }]}>
-                    <Text style={{ color: Palette.purple, fontSize: 10, fontWeight: "700" }}>
-                      ✏️ Ada Essay
-                    </Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <Text style={[styles.cardTitle, { color: theme.text }]}>{challenge.name}</Text>
+                    {challenge.hasEssay && (
+                      <View style={[styles.pill, { backgroundColor: Palette.purpleBg }]}>
+                        <Text style={{ color: Palette.purple, fontSize: 10, fontWeight: "700" }}>
+                          ✏️ Ada Essay
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-              <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
-                {challenge.questionCountRequired} soal · lulus min {challenge.passThresholdPercent}% ·{" "}
-                {challenge.isExam
-                  ? `${challenge.timeLimitSeconds}s total`
-                  : `${challenge.timeLimitSeconds}s/soal`}
-              </Text>
-            </View>
+                  <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
+                    {challenge.questionCountRequired} soal · lulus min {challenge.passThresholdPercent}% ·{" "}
+                    {challenge.isExam
+                      ? `${challenge.timeLimitSeconds}s total`
+                      : `${challenge.timeLimitSeconds}s/soal`}
+                  </Text>
+                </View>
 
-            {challenge.completed ? (
-              <View style={[styles.pill, { backgroundColor: Palette.greenBg }]}>
-                <Text style={{ color: Palette.green, fontSize: 11, fontWeight: "700" }}>Selesai ✓</Text>
-              </View>
-            ) : (
-              <Text style={{ color: Palette.blue, fontSize: 13, fontWeight: "700" }}>Mulai →</Text>
-            )}
-          </Pressable>
-        ))}
-      </ScrollView>
+                {challenge.completed ? (
+                  <View style={[styles.pill, { backgroundColor: Palette.greenBg }]}>
+                    <Text style={{ color: Palette.green, fontSize: 11, fontWeight: "700" }}>Selesai ✓</Text>
+                  </View>
+                ) : (
+                  <Text style={{ color: Palette.blue, fontSize: 13, fontWeight: "700" }}>Mulai →</Text>
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      ) : (
+        <>
+          {categoriesQuery.isLoading && <ActivityIndicator style={{ marginTop: 24 }} />}
+
+          <ScrollView contentContainerStyle={styles.list}>
+            {categoriesQuery.data?.map((category) => (
+              <Pressable
+                key={category.id}
+                onPress={() => router.push(`/belajar/${tierCode}/kategori/${category.id}`)}
+                style={[
+                  styles.card,
+                  {
+                    borderColor: scheme === "dark" ? Palette.borderDark : Palette.border,
+                    backgroundColor: theme.backgroundElement,
+                  },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>{category.name}</Text>
+                </View>
+                <Text style={{ color: Palette.blue, fontSize: 13, fontWeight: "700" }}>Lihat level →</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      )}
     </SafeAreaView>
   );
 }
