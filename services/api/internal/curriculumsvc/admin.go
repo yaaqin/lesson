@@ -72,7 +72,7 @@ func (s *Service) AdminListCurriculum(ctx context.Context) ([]AdminTier, error) 
 	for challengeRows.Next() {
 		var (
 			c       AdminChallenge
-			batchID string
+			batchID *string
 		)
 		if err := challengeRows.Scan(
 			&c.ID, &batchID, &c.Name, &c.IsExam, &c.TimeLimitSeconds,
@@ -80,7 +80,13 @@ func (s *Service) AdminListCurriculum(ctx context.Context) ([]AdminTier, error) 
 		); err != nil {
 			return nil, err
 		}
-		pos, ok := batchIndex[batchID]
+		if batchID == nil {
+			// Challenge tier "umum" nempel ke category, bukan batch (lihat
+			// migrations/0005_puzzle_categories.sql) -- pohon Tier->Batch->Challenge
+			// di halaman ini belum nampung itu, jadi dilewatin dulu.
+			continue
+		}
+		pos, ok := batchIndex[*batchID]
 		if !ok {
 			continue
 		}
