@@ -1,16 +1,17 @@
-# Contoh server block nginx buat proxy ke container api (bind ke
-# 127.0.0.1:9801 lewat docker-compose.yml). Taruh sebagai file baru di
-# /etc/nginx/sites-available/api.namadomainkamu.com, lalu:
+# Server block nginx buat proxy domain lesson-api.yaaqin.xyz ke container api
+# (bind ke 127.0.0.1:9801 lewat docker-compose.yml). Taruh sebagai file baru
+# di /etc/nginx/sites-available/lesson-api.yaaqin.xyz, lalu:
 #
-#   sudo ln -s /etc/nginx/sites-available/api.namadomainkamu.com /etc/nginx/sites-enabled/
+#   sudo ln -s /etc/nginx/sites-available/lesson-api.yaaqin.xyz /etc/nginx/sites-enabled/
 #   sudo nginx -t && sudo systemctl reload nginx
-#   sudo certbot --nginx -d api.namadomainkamu.com   # otomatis nambahin blok HTTPS + redirect
+#   sudo certbot --nginx -d lesson-api.yaaqin.xyz   # otomatis nambahin blok HTTPS + redirect
 #
-# Pastikan DNS A record domain ini udah ngarah ke IP VPS sebelum certbot.
+# Pastikan DNS A record lesson-api.yaaqin.xyz udah ngarah ke IP VPS ini
+# sebelum jalanin certbot (verifikasi ACME butuh domain udah resolve).
 
 server {
     listen 80;
-    server_name api.namadomainkamu.com;
+    server_name lesson-api.yaaqin.xyz;
 
     location / {
         proxy_pass http://127.0.0.1:9801;
