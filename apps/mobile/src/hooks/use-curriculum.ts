@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { publicApi, privateApi } from "@/lib/http";
 
 export type Tier = { id: string; code: string; name: string; usesBatch: boolean };
@@ -97,6 +97,29 @@ export function useChallengesQuery(batchId: string | undefined) {
       (await privateApi.get<ChallengeListItem[]>(`/app/batches/${batchId}/challenges`)).data,
     enabled: !!batchId,
   });
+}
+
+// useChallengesForBatchesQuery: tier bisa punya lebih dari 1 batch (mis. SMP
+// "Batch 1 — Semester 1" lanjut "Batch 2 — Soal Campuran") -- gabungin semua
+// challenge-nya jadi satu list berurutan (urutan batch tetap dipertahankan)
+// biar user ngerasain progresi yang menyambung, bukan cuma batch pertama.
+export function useChallengesForBatchesQuery(batches: Batch[] | undefined) {
+  const list = batches ?? [];
+  const results = useQueries({
+    queries: list.map((batch) => ({
+      queryKey: ["challenges", batch.id],
+      queryFn: async () =>
+        (await privateApi.get<ChallengeListItem[]>(`/app/batches/${batch.id}/challenges`)).data,
+      enabled: !!batch.id,
+    })),
+  });
+
+  const isLoading = list.length === 0 ? false : results.some((r) => r.isLoading);
+  const challenges = results.flatMap((r, i) =>
+    (r.data ?? []).map((challenge) => ({ ...challenge, batchName: list[i].name })),
+  );
+
+  return { data: challenges, isLoading };
 }
 
 export function useCategoriesQuery(tierCode: string) {

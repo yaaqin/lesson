@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -42,11 +43,15 @@ type challengeSpec struct {
 	questions             []question
 }
 
-type tierSpec struct {
-	code       string
+type batchSpec struct {
 	name       string
-	batchName  string
 	challenges []challengeSpec
+}
+
+type tierSpec struct {
+	code    string
+	name    string
+	batches []batchSpec
 }
 
 func main() {
@@ -67,29 +72,32 @@ func main() {
 			log.Fatalf("tier %s: %v", tier.code, err)
 		}
 
-		batchID, err := getOrCreateBatch(ctx, pool, tierID, tier.batchName, 0)
-		if err != nil {
-			log.Fatalf("batch %s: %v", tier.batchName, err)
-		}
-
-		fmt.Printf("%s (%s):\n", tier.name, tier.batchName)
-		for order, spec := range tier.challenges {
-			challengeID, existed, err := getOrCreateChallenge(ctx, pool, batchID, spec, order)
+		fmt.Printf("%s:\n", tier.name)
+		for batchOrder, batch := range tier.batches {
+			batchID, err := getOrCreateBatch(ctx, pool, tierID, batch.name, batchOrder)
 			if err != nil {
-				log.Fatalf("challenge %s: %v", spec.name, err)
+				log.Fatalf("batch %s: %v", batch.name, err)
 			}
-			if existed {
-				fmt.Printf("  - %s (sudah ada, dilewati)\n", spec.name)
-				continue
+
+			fmt.Printf("  %s:\n", batch.name)
+			for order, spec := range batch.challenges {
+				challengeID, existed, err := getOrCreateChallenge(ctx, pool, batchID, spec, order)
+				if err != nil {
+					log.Fatalf("challenge %s: %v", spec.name, err)
+				}
+				if existed {
+					fmt.Printf("    - %s (sudah ada, dilewati)\n", spec.name)
+					continue
+				}
+				if err := insertQuestions(ctx, pool, challengeID, spec.questions); err != nil {
+					log.Fatalf("insert questions for %s: %v", spec.name, err)
+				}
+				kind := "challenge"
+				if spec.isExam {
+					kind = "ujian"
+				}
+				fmt.Printf("    - %s [%s]: %d soal di bank\n", spec.name, kind, len(spec.questions))
 			}
-			if err := insertQuestions(ctx, pool, challengeID, spec.questions); err != nil {
-				log.Fatalf("insert questions for %s: %v", spec.name, err)
-			}
-			kind := "challenge"
-			if spec.isExam {
-				kind = "ujian"
-			}
-			fmt.Printf("  - %s [%s]: %d soal di bank\n", spec.name, kind, len(spec.questions))
 		}
 	}
 
@@ -310,14 +318,19 @@ func genSDMixed(optionCount int) question {
 
 func sdTierSpec() tierSpec {
 	return tierSpec{
-		code: "sd", name: "SD", batchName: "Batch 1 — Semester 1",
-		challenges: []challengeSpec{
-			buildChallenge("Penjumlahan", false, 5, 8, 70, 3, 20, genAddition),
-			buildChallenge("Pengurangan", false, 5, 8, 70, 3, 20, genSubtraction),
-			buildChallenge("Perkalian", false, 5, 8, 70, 3, 20, genMultiplication),
-			buildChallenge("Pembagian", false, 5, 8, 70, 3, 20, genDivision),
-			buildChallenge("Campuran Dasar", false, 5, 8, 70, 3, 20, genSDMixed),
-			buildChallenge("Ujian Semester 1 SD", true, 8, 12, 70, 3, 300, genSDMixed),
+		code: "sd", name: "SD",
+		batches: []batchSpec{
+			{
+				name: "Batch 1 — Semester 1",
+				challenges: []challengeSpec{
+					buildChallenge("Penjumlahan", false, 5, 8, 70, 3, 20, genAddition),
+					buildChallenge("Pengurangan", false, 5, 8, 70, 3, 20, genSubtraction),
+					buildChallenge("Perkalian", false, 5, 8, 70, 3, 20, genMultiplication),
+					buildChallenge("Pembagian", false, 5, 8, 70, 3, 20, genDivision),
+					buildChallenge("Campuran Dasar", false, 5, 8, 70, 3, 20, genSDMixed),
+					buildChallenge("Ujian Semester 1 SD", true, 8, 12, 70, 3, 300, genSDMixed),
+				},
+			},
 		},
 	}
 }
@@ -408,16 +421,135 @@ func genSMPMixed(optionCount int) question {
 
 func smpTierSpec() tierSpec {
 	return tierSpec{
-		code: "smp", name: "SMP", batchName: "Batch 1 — Semester 1",
-		challenges: []challengeSpec{
-			buildChallenge("Aljabar Dasar", false, 5, 8, 70, 4, 25, genLinearEquation),
-			buildChallenge("Pecahan", false, 5, 8, 70, 4, 25, genFractionSimplify),
-			buildChallenge("Persentase", false, 5, 8, 70, 4, 25, genPercentage),
-			buildChallenge("Perbandingan", false, 5, 8, 70, 4, 25, genRatio),
-			buildChallenge("Bilangan Bulat", false, 5, 8, 70, 4, 25, genIntegerOps),
-			buildChallenge("Ujian Semester 1 SMP", true, 8, 12, 70, 4, 480, genSMPMixed),
+		code: "smp", name: "SMP",
+		batches: []batchSpec{
+			{
+				name: "Batch 1 — Semester 1",
+				challenges: []challengeSpec{
+					buildChallenge("Aljabar Dasar", false, 5, 8, 70, 4, 25, genLinearEquation),
+					buildChallenge("Pecahan", false, 5, 8, 70, 4, 25, genFractionSimplify),
+					buildChallenge("Persentase", false, 5, 8, 70, 4, 25, genPercentage),
+					buildChallenge("Perbandingan", false, 5, 8, 70, 4, 25, genRatio),
+					buildChallenge("Bilangan Bulat", false, 5, 8, 70, 4, 25, genIntegerOps),
+					buildChallenge("Ujian Semester 1 SMP", true, 8, 12, 70, 4, 480, genSMPMixed),
+				},
+			},
+			{
+				name:       "Batch 2 — Soal Campuran",
+				challenges: smpCampuranChallenges(),
+			},
 		},
 	}
+}
+
+// ---------- SMP - Soal Campuran (batch 2, gacha gado-gado lebih susah) ----------
+//
+// Bukan per-topik kayak batch 1 -- tiap level udah campur (aljabar 2 langkah,
+// pecahan berpenyebut beda, persentase naik/turun, rasio soal cerita, operasi
+// hitung campuran), banknya lebih gede (16 per level) biar variasi gacha-nya
+// berasa, question_count_required 10 -> pemain harus jawab 10 dari 16 tiap main.
+
+func genTwoStepLinearHard(optionCount int) question {
+	x := rand.IntN(21) - 10
+	a := rand.IntN(8) + 2
+	b := rand.IntN(31) - 15
+	c := a*x + b
+	correct := float64(x)
+	return question{
+		prompt:  fmt.Sprintf("%dx + %d = %d, x = ?", a, b, c),
+		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct - 2, correct + 2, correct + 3}, optionCount, true),
+	}
+}
+
+func genFractionSumHard(optionCount int) question {
+	denoms := []int{2, 3, 4, 5, 6, 8}
+	bd := denoms[rand.IntN(len(denoms))]
+	dd := denoms[rand.IntN(len(denoms))]
+	bn := rand.IntN(bd-1) + 1
+	dn := rand.IntN(dd-1) + 1
+	num := bn*dd + dn*bd
+	den := bd * dd
+	g := gcd(num, den)
+	if g == 0 {
+		g = 1
+	}
+	simpNum, simpDen := num/g, den/g
+	correct := float64(simpNum)
+	return question{
+		prompt:  fmt.Sprintf("%d/%d + %d/%d, hasilnya disederhanakan, pembilangnya jadi?", bn, bd, dn, dd),
+		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct + 2, float64(simpDen), float64(num)}, optionCount, false),
+	}
+}
+
+func genPercentageChangeHard(optionCount int) question {
+	percents := []int{10, 20, 25, 50}
+	p := percents[rand.IntN(len(percents))]
+	base := (rand.IntN(8) + 2) * 100
+	up := rand.IntN(2) == 0
+	var correct float64
+	verb := "naik"
+	if up {
+		correct = float64(base) * float64(100+p) / 100
+	} else {
+		verb = "turun"
+		correct = float64(base) * float64(100-p) / 100
+	}
+	return question{
+		prompt:  fmt.Sprintf("Harga barang Rp%d %s %d%%. Harga sekarang jadi Rp?", base, verb, p),
+		options: buildOptions(correct, []float64{correct - 100, correct + 100, correct - 50, correct + 50, float64(base)}, optionCount, false),
+	}
+}
+
+func genRatioWordHard(optionCount int) question {
+	a, b := rand.IntN(6)+1, rand.IntN(6)+1
+	for gcd(a, b) != 1 {
+		b = rand.IntN(6) + 1
+	}
+	parts := a + b
+	k := rand.IntN(5) + 2
+	total := parts * k * 10
+	shareA := total * a / parts
+	correct := float64(shareA)
+	return question{
+		prompt:  fmt.Sprintf("Perbandingan uang Andi dan Budi adalah %d : %d. Jika jumlah uang mereka Rp%d, uang Andi = Rp?", a, b, total),
+		options: buildOptions(correct, []float64{correct - 10, correct + 10, correct - 20, correct + 20, float64(total - shareA)}, optionCount, false),
+	}
+}
+
+func genIntegerOrderOpsHard(optionCount int) question {
+	a := rand.IntN(15) + 1
+	b := rand.IntN(9) + 2
+	c := rand.IntN(20) + 1
+	correct := float64(a - b*c)
+	return question{
+		prompt:  fmt.Sprintf("%d - %d × %d = ?", a, b, c),
+		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct + float64(b), correct - float64(b), -correct}, optionCount, true),
+	}
+}
+
+func genSMPCampuranMixed(optionCount int) question {
+	switch rand.IntN(5) {
+	case 0:
+		return genTwoStepLinearHard(optionCount)
+	case 1:
+		return genFractionSumHard(optionCount)
+	case 2:
+		return genPercentageChangeHard(optionCount)
+	case 3:
+		return genRatioWordHard(optionCount)
+	default:
+		return genIntegerOrderOpsHard(optionCount)
+	}
+}
+
+func smpCampuranChallenges() []challengeSpec {
+	challenges := make([]challengeSpec, 0, 11)
+	for level := 1; level <= 10; level++ {
+		name := fmt.Sprintf("Campuran Level %d", level)
+		challenges = append(challenges, buildChallenge(name, false, 10, 16, 70, 4, 30, genSMPCampuranMixed))
+	}
+	challenges = append(challenges, buildChallenge("Ujian Soal Campuran SMP", true, 10, 16, 70, 4, 600, genSMPCampuranMixed))
+	return challenges
 }
 
 // ---------- SMK / SMA ----------
@@ -540,14 +672,167 @@ func genSMKMixed(optionCount int) question {
 
 func smkTierSpec() tierSpec {
 	return tierSpec{
-		code: "smk", name: "SMK / SMA", batchName: "Batch 1 — Semester 1",
-		challenges: []challengeSpec{
-			buildChallenge("Aljabar Lanjut", false, 5, 8, 70, 5, 30, genLinearTwoStep),
-			buildChallenge("Persamaan Kuadrat", false, 5, 8, 70, 5, 30, genQuadraticRoot),
-			buildChallenge("Trigonometri Dasar", false, 5, 8, 70, 5, 30, genTrig),
-			buildChallenge("Logaritma Dasar", false, 5, 8, 70, 5, 30, genLogarithm),
-			buildChallenge("Statistika Dasar", false, 5, 8, 70, 5, 30, genStatisticsMean),
-			buildChallenge("Ujian Semester 1 SMK/SMA", true, 8, 12, 70, 5, 600, genSMKMixed),
+		code: "smk", name: "SMK / SMA",
+		batches: []batchSpec{
+			{
+				name: "Batch 1 — Semester 1",
+				challenges: []challengeSpec{
+					buildChallenge("Aljabar Lanjut", false, 5, 8, 70, 5, 30, genLinearTwoStep),
+					buildChallenge("Persamaan Kuadrat", false, 5, 8, 70, 5, 30, genQuadraticRoot),
+					buildChallenge("Trigonometri Dasar", false, 5, 8, 70, 5, 30, genTrig),
+					buildChallenge("Logaritma Dasar", false, 5, 8, 70, 5, 30, genLogarithm),
+					buildChallenge("Statistika Dasar", false, 5, 8, 70, 5, 30, genStatisticsMean),
+					buildChallenge("Ujian Semester 1 SMK/SMA", true, 8, 12, 70, 5, 600, genSMKMixed),
+				},
+			},
+			{
+				name:       "Batch 2 — Soal Campuran",
+				challenges: smkCampuranChallenges(),
+			},
 		},
 	}
+}
+
+// ---------- SMK/SMA - Soal Campuran (batch 2, gacha gado-gado lebih susah) ----------
+//
+// Sama pola-nya kayak SMP batch 2: tiap level udah campur topik (SPLDV, akar
+// kuadrat non-monic, kombinasi trig, kombinasi log, median), bank 22 soal per
+// level, question_count_required 15 -> 15 dari 22 diambil tiap main.
+
+func genLinearSystemHard(optionCount int) question {
+	x := rand.IntN(11) - 5
+	y := rand.IntN(11) - 5
+	a, b := rand.IntN(4)+1, rand.IntN(4)+1
+	d, e := rand.IntN(4)+1, rand.IntN(4)+1
+	for d*b == e*a {
+		d = rand.IntN(4) + 1
+	}
+	c := a*x + b*y
+	f := d*x + e*y
+	correct := float64(x)
+	return question{
+		prompt:  fmt.Sprintf("%dx + %dy = %d dan %dx + %dy = %d, nilai x = ?", a, b, c, d, e, f),
+		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct - 2, correct + 2, correct + 3}, optionCount, true),
+	}
+}
+
+func genQuadraticSumProduct(optionCount int) question {
+	r1 := rand.IntN(9) - 4
+	r2 := rand.IntN(9) - 4
+	for r2 == r1 {
+		r2 = rand.IntN(9) - 4
+	}
+	a := rand.IntN(3) + 1
+	b := -a * (r1 + r2)
+	c := a * r1 * r2
+
+	aPrefix := ""
+	if a != 1 {
+		aPrefix = fmt.Sprintf("%d", a)
+	}
+	bSign := "+"
+	if b < 0 {
+		bSign = "-"
+	}
+	cSign := "+"
+	if c < 0 {
+		cSign = "-"
+	}
+	prompt := fmt.Sprintf("%sx² %s %dx %s %d = 0 punya akar x1 dan x2.", aPrefix, bSign, absInt(b), cSign, absInt(c))
+
+	var correct float64
+	if rand.IntN(2) == 0 {
+		correct = float64(r1 + r2)
+		prompt += " Nilai x1 + x2 = ?"
+	} else {
+		correct = float64(r1 * r2)
+		prompt += " Nilai x1 × x2 = ?"
+	}
+	return question{
+		prompt:  prompt,
+		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct - 2, correct + 2, -correct}, optionCount, true),
+	}
+}
+
+func genTrigCombo(optionCount int) question {
+	f1 := trigTable[rand.IntN(len(trigTable))]
+	f2 := trigTable[rand.IntN(len(trigTable))]
+	for f2.label == f1.label {
+		f2 = trigTable[rand.IntN(len(trigTable))]
+	}
+	op := "+"
+	correct := f1.value + f2.value
+	if rand.IntN(2) == 0 {
+		op = "-"
+		correct = f1.value - f2.value
+	}
+	return question{
+		prompt:  fmt.Sprintf("%s %s %s = ?", f1.label, op, f2.label),
+		options: buildOptions(correct, []float64{correct - 0.5, correct + 0.5, correct - 0.29, correct + 0.29, -correct}, optionCount, true),
+	}
+}
+
+func genLogCombo(optionCount int) question {
+	bases := []int{2, 3, 5}
+	b1 := bases[rand.IntN(len(bases))]
+	b2 := bases[rand.IntN(len(bases))]
+	k1 := rand.IntN(4) + 1
+	k2 := rand.IntN(4) + 1
+	v1, v2 := 1, 1
+	for range k1 {
+		v1 *= b1
+	}
+	for range k2 {
+		v2 *= b2
+	}
+	correct := float64(k1 + k2)
+	return question{
+		prompt:  fmt.Sprintf("Log basis %d dari %d + Log basis %d dari %d = ?", b1, v1, b2, v2),
+		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct + 2, correct - 2}, optionCount, false),
+	}
+}
+
+func genStatsMedianHard(optionCount int) question {
+	const n = 5
+	values := make([]int, n)
+	for i := range values {
+		values[i] = rand.IntN(41) - 10
+	}
+	sorted := append([]int{}, values...)
+	sort.Ints(sorted)
+	median := sorted[n/2]
+	strs := make([]string, n)
+	for i, v := range values {
+		strs[i] = fmt.Sprintf("%d", v)
+	}
+	correct := float64(median)
+	return question{
+		prompt:  fmt.Sprintf("Median dari data %s adalah?", strings.Join(strs, ", ")),
+		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct - 2, correct + 2, float64(sorted[0])}, optionCount, true),
+	}
+}
+
+func genSMACampuranMixed(optionCount int) question {
+	switch rand.IntN(5) {
+	case 0:
+		return genLinearSystemHard(optionCount)
+	case 1:
+		return genQuadraticSumProduct(optionCount)
+	case 2:
+		return genTrigCombo(optionCount)
+	case 3:
+		return genLogCombo(optionCount)
+	default:
+		return genStatsMedianHard(optionCount)
+	}
+}
+
+func smkCampuranChallenges() []challengeSpec {
+	challenges := make([]challengeSpec, 0, 11)
+	for level := 1; level <= 10; level++ {
+		name := fmt.Sprintf("Campuran Level %d", level)
+		challenges = append(challenges, buildChallenge(name, false, 15, 22, 70, 5, 35, genSMACampuranMixed))
+	}
+	challenges = append(challenges, buildChallenge("Ujian Soal Campuran SMK/SMA", true, 15, 22, 70, 5, 1125, genSMACampuranMixed))
+	return challenges
 }

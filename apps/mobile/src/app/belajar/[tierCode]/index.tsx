@@ -6,7 +6,7 @@ import { Palette } from "@/constants/palette";
 import {
   useBatchesQuery,
   useCategoriesQuery,
-  useChallengesQuery,
+  useChallengesForBatchesQuery,
   useMeQuery,
   useTiersQuery,
 } from "@/hooks/use-curriculum";
@@ -22,8 +22,8 @@ export default function TierBatchScreen() {
   const usesBatch = tier?.usesBatch ?? true;
 
   const batchesQuery = useBatchesQuery(tierCode);
-  const batch = batchesQuery.data?.[0];
-  const challengesQuery = useChallengesQuery(usesBatch ? batch?.id : undefined);
+  const batches = usesBatch ? batchesQuery.data : undefined;
+  const challengesQuery = useChallengesForBatchesQuery(batches);
 
   const categoriesQuery = useCategoriesQuery(!usesBatch ? tierCode : "");
 
@@ -43,9 +43,7 @@ export default function TierBatchScreen() {
         <Text style={{ color: Palette.amber, fontWeight: "700" }}>🔥 {streak}</Text>
       </View>
 
-      <Text style={[styles.title, { color: theme.text }]}>
-        {tier?.name ?? tierCode?.toUpperCase()} {usesBatch && batch ? `· ${batch.name}` : ""}
-      </Text>
+      <Text style={[styles.title, { color: theme.text }]}>{tier?.name ?? tierCode?.toUpperCase()}</Text>
 
       {usesBatch ? (
         <>
@@ -53,53 +51,59 @@ export default function TierBatchScreen() {
 
           <ScrollView contentContainerStyle={styles.list}>
             {challengesQuery.data?.map((challenge, index) => (
-              <Pressable
-                key={challenge.id}
-                onPress={() => router.push(`/belajar/${tierCode}/${challenge.id}`)}
-                style={[
-                  styles.card,
-                  {
-                    borderColor: scheme === "dark" ? Palette.borderDark : Palette.border,
-                    backgroundColor: theme.backgroundElement,
-                  },
-                ]}
-              >
-                <View
+              <View key={challenge.id} style={{ gap: 10 }}>
+                {(index === 0 || challenge.batchName !== challengesQuery.data[index - 1].batchName) && (
+                  <Text style={[styles.batchHeader, { color: theme.textSecondary }]}>
+                    {challenge.batchName}
+                  </Text>
+                )}
+                <Pressable
+                  onPress={() => router.push(`/belajar/${tierCode}/${challenge.id}`)}
                   style={[
-                    styles.badgeCircle,
-                    { backgroundColor: challenge.isExam ? Palette.amber : Palette.blue },
+                    styles.card,
+                    {
+                      borderColor: scheme === "dark" ? Palette.borderDark : Palette.border,
+                      backgroundColor: theme.backgroundElement,
+                    },
                   ]}
                 >
-                  <Text style={styles.badgeCircleText}>{challenge.isExam ? "🏁" : index + 1}</Text>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <Text style={[styles.cardTitle, { color: theme.text }]}>{challenge.name}</Text>
-                    {challenge.hasEssay && (
-                      <View style={[styles.pill, { backgroundColor: Palette.purpleBg }]}>
-                        <Text style={{ color: Palette.purple, fontSize: 10, fontWeight: "700" }}>
-                          ✏️ Ada Essay
-                        </Text>
-                      </View>
-                    )}
+                  <View
+                    style={[
+                      styles.badgeCircle,
+                      { backgroundColor: challenge.isExam ? Palette.amber : Palette.blue },
+                    ]}
+                  >
+                    <Text style={styles.badgeCircleText}>{challenge.isExam ? "🏁" : index + 1}</Text>
                   </View>
-                  <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
-                    {challenge.questionCountRequired} soal · lulus min {challenge.passThresholdPercent}% ·{" "}
-                    {challenge.isExam
-                      ? `${challenge.timeLimitSeconds}s total`
-                      : `${challenge.timeLimitSeconds}s/soal`}
-                  </Text>
-                </View>
 
-                {challenge.completed ? (
-                  <View style={[styles.pill, { backgroundColor: Palette.greenBg }]}>
-                    <Text style={{ color: Palette.green, fontSize: 11, fontWeight: "700" }}>Selesai ✓</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <Text style={[styles.cardTitle, { color: theme.text }]}>{challenge.name}</Text>
+                      {challenge.hasEssay && (
+                        <View style={[styles.pill, { backgroundColor: Palette.purpleBg }]}>
+                          <Text style={{ color: Palette.purple, fontSize: 10, fontWeight: "700" }}>
+                            ✏️ Ada Essay
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
+                      {challenge.questionCountRequired} soal · lulus min {challenge.passThresholdPercent}% ·{" "}
+                      {challenge.isExam
+                        ? `${challenge.timeLimitSeconds}s total`
+                        : `${challenge.timeLimitSeconds}s/soal`}
+                    </Text>
                   </View>
-                ) : (
-                  <Text style={{ color: Palette.blue, fontSize: 13, fontWeight: "700" }}>Mulai →</Text>
-                )}
-              </Pressable>
+
+                  {challenge.completed ? (
+                    <View style={[styles.pill, { backgroundColor: Palette.greenBg }]}>
+                      <Text style={{ color: Palette.green, fontSize: 11, fontWeight: "700" }}>Selesai ✓</Text>
+                    </View>
+                  ) : (
+                    <Text style={{ color: Palette.blue, fontSize: 13, fontWeight: "700" }}>Mulai →</Text>
+                  )}
+                </Pressable>
+              </View>
             ))}
           </ScrollView>
         </>
@@ -138,6 +142,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 16, marginBottom: 12 },
   title: { fontSize: 20, fontWeight: "700", marginBottom: 16 },
   list: { gap: 10, paddingBottom: 24 },
+  batchHeader: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   card: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 18, padding: 14 },
   badgeCircle: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   badgeCircleText: { color: "#fff", fontWeight: "700", fontSize: 13 },
