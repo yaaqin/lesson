@@ -3,28 +3,7 @@ services:
     build: .
     env_file: .env
     restart: unless-stopped
-    expose:
-      - "9801"
-    # Buka ini kalau mau akses API langsung tanpa lewat Caddy/domain dulu
-    # (mis. buat tes cepat pakai IP:9801 sebelum DNS domain aktif).
-    # ports:
-    #   - "9801:9801"
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
+    # Cuma bind ke localhost -- publik-nya lewat nginx yang udah jalan di VPS
+    # (reverse proxy shared buat semua project), bukan diekspos langsung.
     ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - api
-
-volumes:
-  caddy_data:
-  caddy_config:
+      - "127.0.0.1:9801:9801"
