@@ -176,8 +176,14 @@ func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]
 
 // SubmitAttempt hitung skor dari snapshot (bukan bank live), tentuin lulus/gagal,
 // lalu update nyawa (berkurang kalau gagal) & streak harian (jalan terus baik
-// lulus maupun gagal, asal sesi diselesaikan — FSD.md 3.7).
-func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, answers []SubmitAnswer) (*SubmitResult, error) {
+// lulus maupun gagal, asal sesi diselesaikan — FSD.md 3.7). securityEvents =
+// sisa buffer anti-cheating di klien yang belum sempat ke-flush, disimpen dulu
+// sebelum risk score dihitung (lihat security.go).
+func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, answers []SubmitAnswer, securityEvents []SecurityEvent) (*SubmitResult, error) {
+	if err := validateSecurityEvents(securityEvents); err != nil {
+		return nil, err
+	}
+
 	var (
 		challengeID string
 		status      string
@@ -200,6 +206,14 @@ func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, a
 
 	var snapshot []snapshotQuestion
 	if err := json.Unmarshal(snapshotRaw, &snapshot); err != nil {
+		return nil, err
+	}
+
+	if err := s.insertSecurityEvents(ctx, attemptID, securityEvents); err != nil {
+		return nil, err
+	}
+	riskScore, riskLevel, err := s.scoreAttemptRisk(ctx, attemptID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -279,9 +293,10 @@ func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, a
 
 	if _, err := s.db.Exec(ctx, `
 		UPDATE challenge_attempts
-		SET status = $1, score_percent = $2, answers_submitted = $3, completed_at = now()
-		WHERE id = $4
-	`, newStatus, scorePercent, answersJSON, attemptID); err != nil {
+		SET status = $1, score_percent = $2, answers_submitted = $3, completed_at = now(),
+			risk_score = $4, risk_level = $5
+		WHERE id = $6
+	`, newStatus, scorePercent, answersJSON, riskScore, riskLevel, attemptID); err != nil {
 		return nil, err
 	}
 
@@ -302,6 +317,7 @@ func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, a
 		TotalQuestions: totalQuestions,
 		LivesRemaining: livesRemaining,
 		CurrentStreak:  currentStreak,
+		RiskLevel:      riskLevel,
 	}, nil
 }
 

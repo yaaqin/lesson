@@ -1,5 +1,6 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { publicApi, privateApi } from "@/lib/http";
+import type { SecurityEvent } from "@/hooks/use-security-event-reporter";
 
 export type Tier = { id: string; code: string; name: string; usesBatch: boolean };
 export type Batch = { id: string; name: string };
@@ -63,6 +64,8 @@ export type SubmitResult = {
   totalQuestions: number;
   livesRemaining: number;
   currentStreak: number;
+  // Hasil scoring anti-cheating di server (lihat use-security-event-reporter).
+  riskLevel: "normal" | "low_confidence" | "review";
 };
 
 export type MeInfo = {
@@ -168,12 +171,18 @@ export function useSubmitAttemptMutation() {
     mutationFn: async ({
       attemptId,
       answers,
+      securityEvents,
     }: {
       attemptId: string;
       answers: SubmitAnswer[];
+      securityEvents: SecurityEvent[];
     }) =>
-      (await privateApi.post<SubmitResult>(`/app/attempts/${attemptId}/submit`, { answers }))
-        .data,
+      (
+        await privateApi.post<SubmitResult>(`/app/attempts/${attemptId}/submit`, {
+          answers,
+          securityEvents,
+        })
+      ).data,
     // nyawa/streak berubah di server begitu attempt disubmit -> invalidate biar
     // indikator di header (dan daftar "Selesai") langsung ke-refresh, gak nunggu
     // staleTime useMeQuery habis dulu.

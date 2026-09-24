@@ -13,8 +13,15 @@ import {
   type StartResult,
   type SubmitResult,
 } from "@/hooks/use-curriculum";
+import { useSecurityEventReporter, type SecurityEvent } from "@/hooks/use-security-event-reporter";
+import { useVisibilityTracker } from "@/hooks/use-visibility-tracker";
+import { useFullscreenGuard } from "@/hooks/use-fullscreen-guard";
+import { QuestionGuard } from "@/components/question-guard";
 
-type Phase = "loading" | "playing" | "result" | "blocked";
+// "intro" = layar aturan sebelum mulai: attempt baru dibikin (dan fullscreen
+// diminta) pas user klik "Mulai Challenge", karena requestFullscreen wajib
+// dipanggil dari klik user.
+type Phase = "intro" | "loading" | "playing" | "result" | "blocked";
 
 export default function ChallengePage() {
   const router = useRouter();
@@ -34,20 +41,78 @@ export default function ChallengePage() {
   const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhase] = useState<Phase>("intro");
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
+  const [awayCount, setAwayCount] = useState(0);
+  const [showAwayWarning, setShowAwayWarning] = useState(false);
 
-  const startedForRef = useRef<string | null>(null);
   const submittingRef = useRef(false);
+  const currentIndexRef = useRef(0);
 
   useEffect(() => {
     if (!hasHydrated) return;
     if (session === null) router.replace("/login");
   }, [hasHydrated, session, router]);
 
+  // ---------- anti-cheating ----------
+  const security = useSecurityEventReporter(game?.attemptId ?? null);
+  const { record: recordSecurityEvent, flush: flushSecurityEvents, drainForSubmit } = security;
+  const getQuestionIndex = useCallback(() => currentIndexRef.current, []);
+
+  const { closeOpenEpisode } = useVisibilityTracker({
+    enabled: phase === "playing",
+    getQuestionIndex,
+    onAwayEnd: useCallback(
+      (event: SecurityEvent) => {
+        recordSecurityEvent(event);
+        setAwayCount((n) => n + 1);
+        setShowAwayWarning(true);
+      },
+      [recordSecurityEvent],
+    ),
+  });
+
+  const fullscreen = useFullscreenGuard({
+    active: phase === "playing",
+    onExit: useCallback(() => {
+      recordSecurityEvent({
+        eventType: "fullscreen_exit",
+        questionIndex: currentIndexRef.current,
+        startedAt: new Date().toISOString(),
+        durationMs: null,
+      });
+    }, [recordSecurityEvent]),
+  });
+  const { exit: exitFullscreen } = fullscreen;
+
+  // Keluar fullscreen selagi ngerjain -> timer di-pause & soal ditutup overlay
+  // sampai user balik ke fullscreen.
+  const pausedForFullscreen = fullscreen.supported && phase === "playing" && !fullscreen.isFullscreen;
+
+  const handleCopyBlocked = useCallback(() => {
+    recordSecurityEvent({
+      eventType: "copy_blocked",
+      questionIndex: currentIndexRef.current,
+      startedAt: new Date().toISOString(),
+      durationMs: null,
+    });
+  }, [recordSecurityEvent]);
+
+  // Batch event dikirim tiap ganti soal (selain tiap 5 event / 15 detik).
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+    flushSecurityEvents();
+  }, [currentIndex, flushSecurityEvents]);
+
+  useEffect(() => {
+    if (phase === "result" || phase === "blocked") exitFullscreen();
+  }, [phase, exitFullscreen]);
+
   const beginAttempt = useCallback(() => {
     submittingRef.current = false;
+    setAwayCount(0);
+    setShowAwayWarning(false);
     setPhase("loading");
     setCurrentIndex(0);
     setAnswers({});
@@ -75,14 +140,15 @@ export default function ChallengePage() {
     });
   }, [params.challengeId, startAttempt]);
 
-  useEffect(() => {
-    if (!session || startedForRef.current === params.challengeId) return;
-    startedForRef.current = params.challengeId;
+  // Dipanggil dari klik tombol (Mulai / Ulangi) -- requestFullscreen harus
+  // jalan di dalam user gesture, jadi dipanggil sebelum request start.
+  const startWithGuard = () => {
+    fullscreen.enter();
     beginAttempt();
-  }, [session, params.challengeId, beginAttempt]);
+  };
 
   const submitWithAnswers = useCallback(
-    (finalAnswers: Record<string, number>, finalGridAnswers: Record<string, Record<string, number>>) => {
+    async (finalAnswers: Record<string, number>, finalGridAnswers: Record<string, Record<string, number>>) => {
       if (!game || submittingRef.current) return;
       submittingRef.current = true;
       const payload = game.questions.map((q) => ({
@@ -90,8 +156,13 @@ export default function ChallengePage() {
         selectedValue: finalAnswers[q.id] ?? null,
         selectedGrid: finalGridAnswers[q.id],
       }));
+      // Sisa event anti-cheating (termasuk episode "pergi" yang masih kebuka
+      // kalau waktu habis selagi user di luar halaman) ikut body submit, biar
+      // pasti kehitung di risk score server.
+      closeOpenEpisode();
+      const securityEvents = await drainForSubmit();
       submitMutation.mutate(
-        { attemptId: game.attemptId, answers: payload },
+        { attemptId: game.attemptId, answers: payload, securityEvents },
         {
           onSuccess: (data) => {
             setResult(data);
@@ -100,7 +171,7 @@ export default function ChallengePage() {
         },
       );
     },
-    [game, submitMutation],
+    [game, submitMutation, closeOpenEpisode, drainForSubmit],
   );
 
   // Mode "challenge biasa": waktu per soal, auto-lanjut begitu waktu habis / jawab.
@@ -149,25 +220,25 @@ export default function ChallengePage() {
 
   // Timer per soal (challenge biasa)
   useEffect(() => {
-    if (phase !== "playing" || !game || game.isExam) return;
+    if (phase !== "playing" || !game || game.isExam || pausedForFullscreen) return;
     if (timeLeft <= 0) {
       const id = setTimeout(() => advanceRegular(null), 0);
       return () => clearTimeout(id);
     }
     const timer = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
     return () => clearTimeout(timer);
-  }, [timeLeft, phase, game, advanceRegular]);
+  }, [timeLeft, phase, game, advanceRegular, pausedForFullscreen]);
 
   // Timer total (ujian) — jalan terus gak peduli lagi di soal mana
   useEffect(() => {
-    if (phase !== "playing" || !game || !game.isExam) return;
+    if (phase !== "playing" || !game || !game.isExam || pausedForFullscreen) return;
     if (timeLeft <= 0) {
       const id = setTimeout(() => submitWithAnswers(answers, gridAnswers), 0);
       return () => clearTimeout(id);
     }
     const timer = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
     return () => clearTimeout(timer);
-  }, [timeLeft, phase, game, answers, gridAnswers, submitWithAnswers]);
+  }, [timeLeft, phase, game, answers, gridAnswers, submitWithAnswers, pausedForFullscreen]);
 
   const handleAnswerRegular = (value: number) => {
     if (selected !== null) return;
@@ -195,10 +266,7 @@ export default function ChallengePage() {
     }
   };
 
-  const retry = () => {
-    startedForRef.current = null;
-    beginAttempt();
-  };
+  const retry = startWithGuard;
 
   if (!session) {
     return (
@@ -218,6 +286,17 @@ export default function ChallengePage() {
           Kembali ke daftar
         </Link>
       </div>
+    );
+  }
+
+  if (phase === "intro") {
+    return (
+      <IntroView
+        tierCode={params.tierCode}
+        lives={meQuery.data?.livesRemaining ?? 0}
+        fullscreenSupported={fullscreen.supported}
+        onStart={startWithGuard}
+      />
     );
   }
 
@@ -249,38 +328,48 @@ export default function ChallengePage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-8">
-        {phase === "playing" && game.isExam && (
-          <ExamView
-            game={game}
-            currentIndex={currentIndex}
-            setCurrentIndex={setCurrentIndex}
-            answers={answers}
-            essayDrafts={essayDrafts}
-            onEssayChange={handleEssayDraftChange}
-            timeLeft={timeLeft}
-            onAnswer={handleAnswerExam}
-            onFinish={() => submitWithAnswers(answers, gridAnswers)}
-          />
+        {phase === "playing" && showAwayWarning && (
+          <AwayWarning count={awayCount} onDismiss={() => setShowAwayWarning(false)} />
         )}
 
-        {phase === "playing" && !game.isExam && currentQuestion && (
-          <RegularView
-            key={currentQuestion.id}
-            game={game}
-            currentIndex={currentIndex}
-            currentQuestion={currentQuestion}
-            timeLeft={timeLeft}
-            selected={selected}
-            onAnswer={handleAnswerRegular}
-            onAnswerPuzzle={handleAnswerPuzzle}
-          />
+        {phase === "playing" && (
+          <QuestionGuard onCopyBlocked={handleCopyBlocked}>
+            {game.isExam && (
+              <ExamView
+                game={game}
+                currentIndex={currentIndex}
+                setCurrentIndex={setCurrentIndex}
+                answers={answers}
+                essayDrafts={essayDrafts}
+                onEssayChange={handleEssayDraftChange}
+                timeLeft={timeLeft}
+                onAnswer={handleAnswerExam}
+                onFinish={() => submitWithAnswers(answers, gridAnswers)}
+              />
+            )}
+
+            {!game.isExam && currentQuestion && (
+              <RegularView
+                key={currentQuestion.id}
+                game={game}
+                currentIndex={currentIndex}
+                currentQuestion={currentQuestion}
+                timeLeft={timeLeft}
+                selected={selected}
+                onAnswer={handleAnswerRegular}
+                onAnswerPuzzle={handleAnswerPuzzle}
+              />
+            )}
+
+            {!game.isExam && !currentQuestion && (
+              <div className="flex flex-1 items-center justify-center py-16">
+                <p className="text-zinc-500 dark:text-zinc-500">Menghitung skor…</p>
+              </div>
+            )}
+          </QuestionGuard>
         )}
 
-        {phase === "playing" && !game.isExam && !currentQuestion && (
-          <div className="flex flex-1 items-center justify-center py-16">
-            <p className="text-zinc-500 dark:text-zinc-500">Menghitung skor…</p>
-          </div>
-        )}
+        {pausedForFullscreen && <FullscreenPausedOverlay onResume={fullscreen.enter} />}
 
         {phase === "result" && result && (
           <ResultView
@@ -614,6 +703,14 @@ function ResultView({
         </span>
       </div>
 
+      {result.riskLevel !== "normal" && (
+        <p className="max-w-sm rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          {result.riskLevel === "review"
+            ? "⚠️ Hasil ini ditandai buat ditinjau, karena tercatat banyak aktivitas di luar halaman soal selama pengerjaan."
+            : "⚠️ Hasil ini ditandai kurang meyakinkan, karena kamu beberapa kali ninggalin halaman soal selama pengerjaan."}
+        </p>
+      )}
+
       <div className="flex items-center gap-6 rounded-2xl border border-black/[.08] bg-white px-6 py-4 dark:border-white/[.145] dark:bg-zinc-900">
         <div className="flex flex-col items-center gap-1">
           <span className="text-2xl">🔥</span>
@@ -705,6 +802,80 @@ function ResultView({
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+function IntroView({
+  tierCode,
+  lives,
+  fullscreenSupported,
+  onStart,
+}: {
+  tierCode: string;
+  lives: number;
+  fullscreenSupported: boolean;
+  onStart: () => void;
+}) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-50 px-6 font-sans dark:bg-black">
+      <LivesBadge lives={lives} />
+      <div className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.145] dark:bg-zinc-900">
+        <h1 className="text-lg font-semibold text-black dark:text-zinc-50">Sebelum mulai</h1>
+        <ul className="flex flex-col gap-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          {fullscreenSupported && (
+            <li>🖥️ Soal dikerjain dalam layar penuh. Keluar layar penuh bikin timer berhenti dan soal ketutup sampai kamu balik.</li>
+          )}
+          <li>👀 Pindah tab, pindah aplikasi, atau buka sidebar/extension selama ngerjain bakal dicatat.</li>
+          <li>📋 Soal gak bisa di-copy.</li>
+          <li>⚠️ Kalau aktivitasnya kebanyakan, hasilmu bisa ditandai buat ditinjau.</li>
+        </ul>
+        <button
+          type="button"
+          onClick={onStart}
+          className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+        >
+          Mulai Challenge
+        </button>
+      </div>
+      <Link href={`/belajar/${tierCode}`} className="text-sm font-medium text-zinc-500 dark:text-zinc-500">
+        ← Kembali ke daftar
+      </Link>
+    </div>
+  );
+}
+
+function AwayWarning({ count, onDismiss }: { count: number; onDismiss: () => void }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+      <span>
+        Kamu barusan ninggalin halaman soal ({count}x). Aktivitas ini dicatat dan bisa bikin hasilmu ditandai.
+      </span>
+      <button type="button" onClick={onDismiss} aria-label="Tutup" className="shrink-0 font-bold">
+        ✕
+      </button>
+    </div>
+  );
+}
+
+// Nutup soal sepenuhnya (bukan cuma dim) selagi di luar fullscreen, biar timer
+// yang di-pause gak bisa dipake buat mikir sambil liat soal.
+function FullscreenPausedOverlay({ onResume }: { onResume: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-zinc-50 px-6 text-center dark:bg-black">
+      <span className="text-4xl">⏸️</span>
+      <h2 className="text-lg font-semibold text-black dark:text-zinc-50">Challenge dijeda</h2>
+      <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
+        Kamu keluar dari layar penuh. Balik ke layar penuh buat lanjut ngerjain. Keluar layar penuh lebih dari 2 kali bikin
+        hasilmu ditandai.
+      </p>
+      <button
+        type="button"
+        onClick={onResume}
+        className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background"
+      >
+        Kembali ke layar penuh
+      </button>
     </div>
   );
 }

@@ -21,6 +21,7 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 	// Gameplay (platform challenge)
 	mux.HandleFunc("POST /app/challenges/{challengeId}/start", s.handleStartChallenge)
 	mux.HandleFunc("POST /app/attempts/{attemptId}/submit", s.handleSubmitAttempt)
+	mux.HandleFunc("POST /app/attempts/{attemptId}/security-events", s.handleRecordSecurityEvents)
 
 	// Ujian organisasi — sisi murid (pembuatan/pengelolaan ujian ada di routes_org.go)
 	mux.HandleFunc("POST /app/exams/{examId}/start", s.notImplemented)
@@ -126,7 +127,8 @@ func (s *Server) handleStartChallenge(w http.ResponseWriter, r *http.Request) {
 }
 
 type submitAttemptRequest struct {
-	Answers []curriculumsvc.SubmitAnswer `json:"answers"`
+	Answers        []curriculumsvc.SubmitAnswer  `json:"answers"`
+	SecurityEvents []curriculumsvc.SecurityEvent `json:"securityEvents"`
 }
 
 func (s *Server) handleSubmitAttempt(w http.ResponseWriter, r *http.Request) {
@@ -143,9 +145,11 @@ func (s *Server) handleSubmitAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	attemptID := r.PathValue("attemptId")
-	result, err := s.curriculum.SubmitAttempt(r.Context(), claims.Subject, attemptID, req.Answers)
+	result, err := s.curriculum.SubmitAttempt(r.Context(), claims.Subject, attemptID, req.Answers, req.SecurityEvents)
 	if err != nil {
 		switch {
+		case errors.Is(err, curriculumsvc.ErrInvalidSecurityEvents):
+			writeError(w, http.StatusBadRequest, "invalid_security_events")
 		case errors.Is(err, curriculumsvc.ErrAttemptNotFound):
 			writeError(w, http.StatusNotFound, "attempt_not_found")
 		case errors.Is(err, curriculumsvc.ErrAttemptFinished):
@@ -156,6 +160,41 @@ func (s *Server) handleSubmitAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+type recordSecurityEventsRequest struct {
+	Events []curriculumsvc.SecurityEvent `json:"events"`
+}
+
+func (s *Server) handleRecordSecurityEvents(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req recordSecurityEventsRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	attemptID := r.PathValue("attemptId")
+	err := s.curriculum.RecordSecurityEvents(r.Context(), claims.Subject, attemptID, req.Events)
+	if err != nil {
+		switch {
+		case errors.Is(err, curriculumsvc.ErrInvalidSecurityEvents):
+			writeError(w, http.StatusBadRequest, "invalid_security_events")
+		case errors.Is(err, curriculumsvc.ErrAttemptNotFound):
+			writeError(w, http.StatusNotFound, "attempt_not_found")
+		case errors.Is(err, curriculumsvc.ErrAttemptFinished):
+			writeError(w, http.StatusConflict, "attempt_already_submitted")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error")
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {

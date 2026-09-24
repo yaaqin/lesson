@@ -122,6 +122,9 @@ type SubmitResult struct {
 	TotalQuestions int  `json:"totalQuestions"`
 	LivesRemaining int  `json:"livesRemaining"`
 	CurrentStreak  int  `json:"currentStreak"`
+	// RiskLevel: hasil scoring anti-cheating (normal | low_confidence | review).
+	// Skor mentahnya sengaja gak dikirim ke klien, cuma disimpen di DB.
+	RiskLevel string `json:"riskLevel"`
 }
 
 type MeInfo struct {
