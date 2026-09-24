@@ -64,7 +64,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	tiers := []tierSpec{sdTierSpec(), smpTierSpec(), smkTierSpec()}
+	tiers := []tierSpec{sdTierSpec(), smpTierSpec(), smkTierSpec(), kampusTierSpec()}
 
 	for tierOrder, tier := range tiers {
 		tierID, err := getOrCreateTier(ctx, pool, tier.code, tier.name, tierOrder)
@@ -254,9 +254,10 @@ func buildOptions(correct float64, candidates []float64, optionCount int, allowN
 	}
 
 	options := make([]option, 0, optionCount)
-	options = append(options, option{value: correct, isCorrect: true})
+	// "+ 0" menormalkan -0 jadi 0 (biar gak tampil "-0" di UI)
+	options = append(options, option{value: correct + 0, isCorrect: true})
 	for _, d := range distinct {
-		options = append(options, option{value: d, isCorrect: false})
+		options = append(options, option{value: d + 0, isCorrect: false})
 	}
 	rand.Shuffle(len(options), func(i, j int) { options[i], options[j] = options[j], options[i] })
 	return options
@@ -875,6 +876,18 @@ func smpTierSpec() tierSpec {
 				name:       "Batch 2 — Soal Campuran",
 				challenges: smpCampuranChallenges(),
 			},
+			{
+				name:       "Batch 3 — Campuran 3 Variabel",
+				challenges: smpCampuranThreeVariableChallenges(),
+			},
+			{
+				name:       "Batch 4 — Campuran 4 Variabel",
+				challenges: smpCampuranFourVariableChallenges(),
+			},
+			{
+				name:       "Batch 5 — Campuran 5 Variabel",
+				challenges: smpCampuranFiveVariableChallenges(),
+			},
 		},
 	}
 }
@@ -986,6 +999,456 @@ func smpCampuranChallenges() []challengeSpec {
 		challenges = append(challenges, buildChallenge(name, false, 10, 16, 70, 4, 30, genSMPCampuranMixed))
 	}
 	challenges = append(challenges, buildChallenge("Ujian Soal Campuran SMP", true, 10, 16, 70, 4, 600, genSMPCampuranMixed))
+	return challenges
+}
+
+// ---------- SMP - Campuran 3 Variabel (batch 3, 3 angka + 2 operasi, salah satunya ratusan) ----------
+//
+// Tiap soal ngoperasiin 3 angka sekaligus (2 operasi), salah satu angkanya
+// dibikin di rentang ratusan (100-999). Level SMP: ngikutin urutan operasi baku,
+// ada kurung, dan hasilnya boleh negatif (bilangan bulat). Separuh soal langsung
+// (ekspresi), separuh soal cerita. Distraktor sengaja masukin jawaban "salah
+// urutan operasi" (dihitung kiri-ke-kanan) biar kejebak kalau asal hitung.
+// Struktur: 10 level (bank 23, wajib 15) + 1 ujian (bank 35, wajib 25).
+
+func genAddMulThreeVar(optionCount int) question {
+	a := rand.IntN(900) + 100 // 100-999
+	b := rand.IntN(11) + 2    // 2-12
+	c := rand.IntN(41) + 10   // 10-50
+	correct := float64(a + b*c)
+	wrongOrder := float64((a + b) * c)
+	return question{
+		prompt:  fmt.Sprintf("%d + %d × %d = ?", a, b, c),
+		options: buildOptions(correct, []float64{wrongOrder, correct - 1, correct + 1, correct - 10, correct + 10, correct + float64(c)}, optionCount, false),
+	}
+}
+
+func genSubMulThreeVar(optionCount int) question {
+	a := rand.IntN(900) + 100   // 100-999
+	b := rand.IntN(16) + 5      // 5-20
+	c := rand.IntN(51) + 10     // 10-60
+	correct := float64(a - b*c) // bisa negatif
+	wrongOrder := float64((a - b) * c)
+	return question{
+		prompt:  fmt.Sprintf("%d - %d × %d = ?", a, b, c),
+		options: buildOptions(correct, []float64{wrongOrder, -correct, correct - 1, correct + 1, correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genDivSubThreeVar(optionCount int) question {
+	b := rand.IntN(8) + 2 // 2-9
+	q := rand.IntN(999/b-100/b) + 100/b + 1
+	a := b * q                // a ÷ b = q (pas), a di rentang ratusan
+	c := rand.IntN(q+50) + 10 // bisa lebih gede dari q -> hasil negatif
+	correct := float64(q - c)
+	return question{
+		prompt:  fmt.Sprintf("%d ÷ %d - %d = ?", a, b, c),
+		options: buildOptions(correct, []float64{-correct, correct - 1, correct + 1, correct - 2, correct + 2, float64(a - c)}, optionCount, true),
+	}
+}
+
+func genParenSubMulThreeVar(optionCount int) question {
+	a := rand.IntN(900) + 100 // 100-999
+	b := rand.IntN(90) + 10   // 10-99
+	c := rand.IntN(8) + 2     // 2-9
+	correct := float64((a - b) * c)
+	noParen := float64(a - b*c)
+	return question{
+		prompt:  fmt.Sprintf("(%d - %d) × %d = ?", a, b, c),
+		options: buildOptions(correct, []float64{noParen, correct - float64(c), correct + float64(c), correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genWordLibraryThreeVar(optionCount int) question {
+	start := rand.IntN(900) + 100 // 100-999 buku awal
+	boxes := rand.IntN(11) + 2    // 2-12 kardus
+	perBox := rand.IntN(41) + 10  // 10-50 buku per kardus
+	correct := float64(start + boxes*perBox)
+	return question{
+		prompt: fmt.Sprintf(
+			"Perpustakaan sekolah punya %d buku. Datang kiriman %d kardus, tiap kardus isi %d buku. Jumlah buku di perpustakaan sekarang?",
+			start, boxes, perBox,
+		),
+		options: buildOptions(correct, []float64{float64((start + boxes) * perBox), float64(start + boxes + perBox), correct - 10, correct + 10, correct - 1}, optionCount, false),
+	}
+}
+
+func genWordSubmarineThreeVar(optionCount int) question {
+	depth := rand.IntN(900) + 100             // 100-999 m di bawah permukaan laut
+	rate := rand.IntN(8) + 2                  // 2-9 m per menit
+	minutes := rand.IntN(26) + 5              // 5-30 menit
+	correct := float64(-depth + rate*minutes) // bisa masih negatif (di bawah laut)
+	return question{
+		prompt: fmt.Sprintf(
+			"Sebuah kapal selam berada di kedalaman %d meter di bawah permukaan laut. Kapal itu naik %d meter tiap menit selama %d menit. Posisi kapal selam sekarang (meter, negatif = di bawah permukaan laut)?",
+			depth, rate, minutes,
+		),
+		options: buildOptions(correct, []float64{-correct, float64(-depth - rate*minutes), correct - float64(rate), correct + float64(rate), correct - 10}, optionCount, true),
+	}
+}
+
+func genWordSnackThreeVar(optionCount int) question {
+	classes := rand.IntN(8) + 2 // 2-9 kelas
+	perClass := rand.IntN(999/classes-100/classes) + 100/classes + 1
+	total := classes * perClass // total snack di rentang ratusan, kebagi pas
+	given := rand.IntN(perClass-1) + 1
+	correct := float64(perClass - given)
+	return question{
+		prompt: fmt.Sprintf(
+			"Panitia punya %d kotak snack yang dibagi rata ke %d kelas. Setiap kelas lalu memberikan %d kotak ke wali kelasnya. Sisa kotak snack tiap kelas?",
+			total, classes, given,
+		),
+		options: buildOptions(correct, []float64{float64(total - given), float64(perClass), correct - 1, correct + 1, correct + 2}, optionCount, false),
+	}
+}
+
+func genSMPCampuranThreeVariableMixed(optionCount int) question {
+	// 50:50 soal langsung vs soal cerita.
+	if rand.IntN(2) == 0 {
+		switch rand.IntN(4) {
+		case 0:
+			return genAddMulThreeVar(optionCount)
+		case 1:
+			return genSubMulThreeVar(optionCount)
+		case 2:
+			return genDivSubThreeVar(optionCount)
+		default:
+			return genParenSubMulThreeVar(optionCount)
+		}
+	}
+	switch rand.IntN(3) {
+	case 0:
+		return genWordLibraryThreeVar(optionCount)
+	case 1:
+		return genWordSubmarineThreeVar(optionCount)
+	default:
+		return genWordSnackThreeVar(optionCount)
+	}
+}
+
+func smpCampuranThreeVariableChallenges() []challengeSpec {
+	challenges := make([]challengeSpec, 0, 11)
+	for level := 1; level <= 10; level++ {
+		name := fmt.Sprintf("Campuran 3 Variabel Level %d", level)
+		challenges = append(challenges, buildChallenge(name, false, 15, 23, 70, 4, 30, genSMPCampuranThreeVariableMixed))
+	}
+	challenges = append(challenges, buildChallenge("Ujian Campuran 3 Variabel SMP", true, 25, 35, 70, 4, 900, genSMPCampuranThreeVariableMixed))
+	return challenges
+}
+
+// ---------- SMP - Campuran 4 Variabel (batch 4, 4 angka + 3 operasi, salah satunya ratusan) ----------
+//
+// Naik satu tingkat dari batch 3: 4 angka dioperasikan sekaligus (3 operasi),
+// minimal satu angka di rentang ratusan (100-999). Tetep gaya SMP: urutan operasi
+// baku, ada kurung, hasil boleh negatif. 50:50 soal langsung vs soal cerita.
+// Opsi jawaban naik jadi 5. Struktur: 10 level (bank 23, wajib 15) + 1 ujian
+// (bank 35, wajib 25).
+
+func genAddMulSubFourVarSMP(optionCount int) question {
+	a := rand.IntN(900) + 100       // 100-999
+	b := rand.IntN(11) + 2          // 2-12
+	c := rand.IntN(41) + 10         // 10-50
+	d := rand.IntN(900) + 100       // 100-999
+	correct := float64(a + b*c - d) // bisa negatif
+	wrongOrder := float64((a+b)*c - d)
+	return question{
+		prompt:  fmt.Sprintf("%d + %d × %d - %d = ?", a, b, c, d),
+		options: buildOptions(correct, []float64{wrongOrder, -correct, correct - 1, correct + 1, correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genSubMulDivFourVarSMP(optionCount int) question {
+	a := rand.IntN(900) + 100   // 100-999
+	b := rand.IntN(16) + 5      // 5-20
+	d := rand.IntN(8) + 2       // 2-9
+	k := rand.IntN(26) + 5      // 5-30
+	c := d * k                  // b × c ÷ d = b × k (pas)
+	correct := float64(a - b*k) // bisa negatif
+	return question{
+		prompt:  fmt.Sprintf("%d - %d × %d ÷ %d = ?", a, b, c, d),
+		options: buildOptions(correct, []float64{float64(a - b*c), -correct, correct - float64(b), correct + float64(b), correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genParenSubMulAddFourVarSMP(optionCount int) question {
+	a := rand.IntN(900) + 100 // 100-999
+	b := rand.IntN(90) + 10   // 10-99
+	c := rand.IntN(8) + 2     // 2-9
+	d := rand.IntN(90) + 10   // 10-99
+	correct := float64((a-b)*c + d)
+	noParen := float64(a - b*c + d)
+	return question{
+		prompt:  fmt.Sprintf("(%d - %d) × %d + %d = ?", a, b, c, d),
+		options: buildOptions(correct, []float64{noParen, float64((a - b) * (c + d)), correct - float64(c), correct + float64(c), correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genDivMulSubFourVarSMP(optionCount int) question {
+	b := rand.IntN(8) + 2 // 2-9
+	q := rand.IntN(999/b-100/b) + 100/b + 1
+	a := b * q                  // a ÷ b = q (pas), a di rentang ratusan
+	c := rand.IntN(8) + 2       // 2-9
+	d := rand.IntN(900) + 100   // 100-999
+	correct := float64(q*c - d) // bisa negatif
+	return question{
+		prompt:  fmt.Sprintf("%d ÷ %d × %d - %d = ?", a, b, c, d),
+		options: buildOptions(correct, []float64{float64(q*c + d), -correct, correct - 1, correct + 1, correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genMulSubMulFourVarSMP(optionCount int) question {
+	a := rand.IntN(21) + 10       // 10-30
+	b := rand.IntN(21) + 10       // 10-30
+	c := rand.IntN(900) + 100     // 100-999
+	d := rand.IntN(8) + 2         // 2-9
+	correct := float64(a*b - c*d) // sering negatif
+	wrongOrder := float64((a*b - c) * d)
+	return question{
+		prompt:  fmt.Sprintf("%d × %d - %d × %d = ?", a, b, c, d),
+		options: buildOptions(correct, []float64{wrongOrder, -correct, correct - 1, correct + 1, correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genWordSubmarineFourVarSMP(optionCount int) question {
+	depth := rand.IntN(900) + 100 // 100-999 m di bawah permukaan laut
+	rate := rand.IntN(8) + 2      // 2-9 m per menit
+	minutes := rand.IntN(26) + 5  // 5-30 menit
+	dive := rand.IntN(91) + 10    // 10-100 m
+	correct := float64(-depth + rate*minutes - dive)
+	return question{
+		prompt: fmt.Sprintf(
+			"Sebuah kapal selam berada di kedalaman %d meter di bawah permukaan laut. Kapal itu naik %d meter tiap menit selama %d menit, lalu menyelam lagi %d meter. Posisi kapal selam sekarang (meter, negatif = di bawah permukaan laut)?",
+			depth, rate, minutes, dive,
+		),
+		options: buildOptions(correct, []float64{-correct, float64(-depth + rate*minutes + dive), float64(-depth - rate*minutes - dive), correct - float64(rate), correct + 10}, optionCount, true),
+	}
+}
+
+func genWordShopFourVarSMP(optionCount int) question {
+	start := rand.IntN(900) + 100 // 100-999 stok awal
+	boxes := rand.IntN(11) + 2    // 2-12 kardus
+	perBox := rand.IntN(41) + 10  // 10-50 per kardus
+	sold := rand.IntN(start+boxes*perBox-1) + 1
+	correct := float64(start + boxes*perBox - sold)
+	return question{
+		prompt: fmt.Sprintf(
+			"Sebuah toko punya stok %d botol minuman. Toko itu menerima %d kardus baru, tiap kardus isi %d botol, lalu %d botol terjual. Sisa stok botol minuman sekarang?",
+			start, boxes, perBox, sold,
+		),
+		options: buildOptions(correct, []float64{float64((start+boxes)*perBox - sold), float64(start + boxes + perBox - sold), correct - 1, correct + 1, correct - 10, correct + 10}, optionCount, false),
+	}
+}
+
+func genWordCooperativeFourVarSMP(optionCount int) question {
+	balance := rand.IntN(900) + 100                     // 100-999 ribu
+	dozens := rand.IntN(11) + 5                         // 5-15 lusin
+	price := rand.IntN(41) + 20                         // 20-60 ribu per lusin
+	income := rand.IntN(91) + 10                        // 10-100 ribu
+	correct := float64(balance - dozens*price + income) // bisa negatif (utang)
+	return question{
+		prompt: fmt.Sprintf(
+			"Koperasi sekolah punya saldo %d ribu rupiah. Koperasi membeli %d lusin buku tulis seharga %d ribu rupiah per lusin, lalu mendapat pemasukan %d ribu rupiah. Saldo koperasi sekarang (ribu rupiah, negatif = utang)?",
+			balance, dozens, price, income,
+		),
+		options: buildOptions(correct, []float64{float64(balance - dozens*price - income), float64((balance-dozens)*price + income), -correct, correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genSMPCampuranFourVariableMixed(optionCount int) question {
+	// 50:50 soal langsung vs soal cerita.
+	if rand.IntN(2) == 0 {
+		switch rand.IntN(5) {
+		case 0:
+			return genAddMulSubFourVarSMP(optionCount)
+		case 1:
+			return genSubMulDivFourVarSMP(optionCount)
+		case 2:
+			return genParenSubMulAddFourVarSMP(optionCount)
+		case 3:
+			return genDivMulSubFourVarSMP(optionCount)
+		default:
+			return genMulSubMulFourVarSMP(optionCount)
+		}
+	}
+	switch rand.IntN(3) {
+	case 0:
+		return genWordSubmarineFourVarSMP(optionCount)
+	case 1:
+		return genWordShopFourVarSMP(optionCount)
+	default:
+		return genWordCooperativeFourVarSMP(optionCount)
+	}
+}
+
+func smpCampuranFourVariableChallenges() []challengeSpec {
+	challenges := make([]challengeSpec, 0, 11)
+	for level := 1; level <= 10; level++ {
+		name := fmt.Sprintf("Campuran 4 Variabel Level %d", level)
+		challenges = append(challenges, buildChallenge(name, false, 15, 23, 70, 5, 40, genSMPCampuranFourVariableMixed))
+	}
+	challenges = append(challenges, buildChallenge("Ujian Campuran 4 Variabel SMP", true, 25, 35, 70, 5, 1000, genSMPCampuranFourVariableMixed))
+	return challenges
+}
+
+// ---------- SMP - Campuran 5 Variabel (batch 5, 5 angka + 4 operasi, salah satunya ratusan) ----------
+//
+// Naik lagi dari batch 4: 5 angka dioperasikan sekaligus (4 operasi), minimal
+// satu angka di rentang ratusan (100-999). Gaya SMP: urutan operasi baku, ada
+// kurung, hasil boleh negatif. 50:50 soal langsung vs soal cerita. Opsi tetep 5.
+// Struktur: 10 level (bank 23, wajib 15) + 1 ujian (bank 35, wajib 25).
+
+func genAddMulSubDivFiveVarSMP(optionCount int) question {
+	a := rand.IntN(900) + 100       // 100-999
+	b := rand.IntN(11) + 2          // 2-12
+	c := rand.IntN(41) + 10         // 10-50
+	e := rand.IntN(8) + 2           // 2-9
+	k := rand.IntN(141) + 10        // 10-150
+	d := e * k                      // d ÷ e = k (pas)
+	correct := float64(a + b*c - k) // bisa negatif kalau k gede
+	return question{
+		prompt:  fmt.Sprintf("%d + %d × %d - %d ÷ %d = ?", a, b, c, d, e),
+		options: buildOptions(correct, []float64{float64(a + b*c - d), float64((a+b)*c - k), -correct, correct - 1, correct + 1, correct - 10}, optionCount, true),
+	}
+}
+
+func genParenSubMulSubMulFiveVarSMP(optionCount int) question {
+	a := rand.IntN(900) + 100         // 100-999
+	b := rand.IntN(90) + 10           // 10-99
+	c := rand.IntN(8) + 2             // 2-9
+	d := rand.IntN(90) + 10           // 10-99
+	e := rand.IntN(11) + 2            // 2-12
+	correct := float64((a-b)*c - d*e) // bisa negatif
+	noParen := float64(a - b*c - d*e)
+	return question{
+		prompt:  fmt.Sprintf("(%d - %d) × %d - %d × %d = ?", a, b, c, d, e),
+		options: buildOptions(correct, []float64{noParen, float64(((a-b)*c - d) * e), -correct, correct - float64(e), correct + float64(e), correct + 10}, optionCount, true),
+	}
+}
+
+func genDivMulAddSubFiveVarSMP(optionCount int) question {
+	b := rand.IntN(8) + 2 // 2-9
+	q := rand.IntN(999/b-100/b) + 100/b + 1
+	a := b * q                      // a ÷ b = q (pas), a di rentang ratusan
+	c := rand.IntN(8) + 2           // 2-9
+	d := rand.IntN(90) + 10         // 10-99
+	e := rand.IntN(900) + 100       // 100-999
+	correct := float64(q*c + d - e) // bisa negatif
+	return question{
+		prompt:  fmt.Sprintf("%d ÷ %d × %d + %d - %d = ?", a, b, c, d, e),
+		options: buildOptions(correct, []float64{float64(q*c + d + e), float64(q*c - d - e), -correct, correct - 1, correct + 1, correct + 10}, optionCount, true),
+	}
+}
+
+func genMulSubMulAddFiveVarSMP(optionCount int) question {
+	a := rand.IntN(21) + 10           // 10-30
+	b := rand.IntN(21) + 10           // 10-30
+	c := rand.IntN(900) + 100         // 100-999
+	d := rand.IntN(8) + 2             // 2-9
+	e := rand.IntN(90) + 10           // 10-99
+	correct := float64(a*b - c*d + e) // sering negatif
+	wrongOrder := float64((a*b-c)*d + e)
+	return question{
+		prompt:  fmt.Sprintf("%d × %d - %d × %d + %d = ?", a, b, c, d, e),
+		options: buildOptions(correct, []float64{wrongOrder, float64(a*b - c*d - e), -correct, correct - 1, correct + 1, correct - 10}, optionCount, true),
+	}
+}
+
+func genSubParenAddMulDivFiveVarSMP(optionCount int) question {
+	a := rand.IntN(900) + 100       // 100-999
+	b := rand.IntN(41) + 10         // 10-50
+	c := rand.IntN(41) + 10         // 10-50
+	e := rand.IntN(8) + 2           // 2-9
+	k := rand.IntN(4) + 2           // 2-5 (biar d != e)
+	d := e * k                      // (b + c) × d ÷ e = (b + c) × k (pas)
+	correct := float64(a - (b+c)*k) // bisa negatif
+	noParen := float64(a - b - c*k)
+	return question{
+		prompt:  fmt.Sprintf("%d - (%d + %d) × %d ÷ %d = ?", a, b, c, d, e),
+		options: buildOptions(correct, []float64{noParen, float64(a - (b+c)*d), -correct, correct - float64(k), correct + float64(k), correct + 10}, optionCount, true),
+	}
+}
+
+func genWordSubmarineFiveVarSMP(optionCount int) question {
+	depth := rand.IntN(900) + 100 // 100-999 m di bawah permukaan laut
+	rate := rand.IntN(8) + 2      // 2-9 m per menit
+	minutes := rand.IntN(26) + 5  // 5-30 menit
+	dive := rand.IntN(91) + 10    // 10-100 m
+	up := rand.IntN(91) + 10      // 10-100 m
+	correct := float64(-depth + rate*minutes - dive + up)
+	return question{
+		prompt: fmt.Sprintf(
+			"Sebuah kapal selam berada di kedalaman %d meter di bawah permukaan laut. Kapal itu naik %d meter tiap menit selama %d menit, lalu menyelam lagi %d meter, kemudian naik %d meter. Posisi kapal selam sekarang (meter, negatif = di bawah permukaan laut)?",
+			depth, rate, minutes, dive, up,
+		),
+		options: buildOptions(correct, []float64{-correct, float64(-depth + rate*minutes + dive - up), float64(-depth - rate*minutes - dive + up), correct - float64(rate), correct + 10}, optionCount, true),
+	}
+}
+
+func genWordShopFiveVarSMP(optionCount int) question {
+	start := rand.IntN(900) + 100 // 100-999 stok awal
+	boxes := rand.IntN(11) + 2    // 2-12 kardus
+	perBox := rand.IntN(41) + 10  // 10-50 per kardus
+	sold := rand.IntN(start+boxes*perBox-1) + 1
+	broken := rand.IntN(start + boxes*perBox - sold + 1) // 0..sisa
+	correct := float64(start + boxes*perBox - sold - broken)
+	return question{
+		prompt: fmt.Sprintf(
+			"Sebuah toko punya stok %d botol minuman. Toko itu menerima %d kardus baru, tiap kardus isi %d botol. Lalu %d botol terjual dan %d botol pecah. Sisa stok botol minuman sekarang?",
+			start, boxes, perBox, sold, broken,
+		),
+		options: buildOptions(correct, []float64{float64((start+boxes)*perBox - sold - broken), float64(start + boxes*perBox - sold + broken), correct - 1, correct + 1, correct - 10, correct + 10}, optionCount, false),
+	}
+}
+
+func genWordCooperativeFiveVarSMP(optionCount int) question {
+	balance := rand.IntN(900) + 100                           // 100-999 ribu
+	dozens := rand.IntN(11) + 5                               // 5-15 lusin
+	price := rand.IntN(41) + 20                               // 20-60 ribu per lusin
+	income := rand.IntN(91) + 10                              // 10-100 ribu
+	fee := rand.IntN(46) + 5                                  // 5-50 ribu
+	correct := float64(balance - dozens*price + income - fee) // bisa negatif (utang)
+	return question{
+		prompt: fmt.Sprintf(
+			"Koperasi sekolah punya saldo %d ribu rupiah. Koperasi membeli %d lusin buku tulis seharga %d ribu rupiah per lusin, mendapat pemasukan %d ribu rupiah, lalu membayar ongkos kirim %d ribu rupiah. Saldo koperasi sekarang (ribu rupiah, negatif = utang)?",
+			balance, dozens, price, income, fee,
+		),
+		options: buildOptions(correct, []float64{float64(balance - dozens*price - income - fee), float64(balance - dozens*price + income + fee), -correct, correct - 10, correct + 10}, optionCount, true),
+	}
+}
+
+func genSMPCampuranFiveVariableMixed(optionCount int) question {
+	// 50:50 soal langsung vs soal cerita.
+	if rand.IntN(2) == 0 {
+		switch rand.IntN(5) {
+		case 0:
+			return genAddMulSubDivFiveVarSMP(optionCount)
+		case 1:
+			return genParenSubMulSubMulFiveVarSMP(optionCount)
+		case 2:
+			return genDivMulAddSubFiveVarSMP(optionCount)
+		case 3:
+			return genMulSubMulAddFiveVarSMP(optionCount)
+		default:
+			return genSubParenAddMulDivFiveVarSMP(optionCount)
+		}
+	}
+	switch rand.IntN(3) {
+	case 0:
+		return genWordSubmarineFiveVarSMP(optionCount)
+	case 1:
+		return genWordShopFiveVarSMP(optionCount)
+	default:
+		return genWordCooperativeFiveVarSMP(optionCount)
+	}
+}
+
+func smpCampuranFiveVariableChallenges() []challengeSpec {
+	challenges := make([]challengeSpec, 0, 11)
+	for level := 1; level <= 10; level++ {
+		name := fmt.Sprintf("Campuran 5 Variabel Level %d", level)
+		challenges = append(challenges, buildChallenge(name, false, 15, 23, 70, 5, 45, genSMPCampuranFiveVariableMixed))
+	}
+	challenges = append(challenges, buildChallenge("Ujian Campuran 5 Variabel SMP", true, 25, 35, 70, 5, 1125, genSMPCampuranFiveVariableMixed))
 	return challenges
 }
 
@@ -1123,18 +1586,30 @@ func smkTierSpec() tierSpec {
 				},
 			},
 			{
-				name:       "Batch 2 — Soal Campuran",
-				challenges: smkCampuranChallenges(),
+				name:       "Batch 2 — Materi Kelas X–XI",
+				challenges: smkMateriChallenges(smkMateriKelasXXI(), "Ujian Materi Kelas X–XI"),
+			},
+			{
+				name:       "Batch 3 — Materi Kelas XII & SMK",
+				challenges: smkMateriChallenges(smkMateriKelasXIIDanSMK(), "Ujian Materi Kelas XII & SMK"),
+			},
+			{
+				name:       "Batch 4 — Campuran Semua Materi",
+				challenges: smkCampuranSemuaMateriChallenges(),
+			},
+			{
+				name:       "Batch 5 — Campuran Sulit",
+				challenges: smkCampuranSulitChallenges(),
 			},
 		},
 	}
 }
 
-// ---------- SMK/SMA - Soal Campuran (batch 2, gacha gado-gado lebih susah) ----------
+// ---------- SMK/SMA - generator soal lanjutan ----------
 //
-// Sama pola-nya kayak SMP batch 2: tiap level udah campur topik (SPLDV, akar
-// kuadrat non-monic, kombinasi trig, kombinasi log, median), bank 22 soal per
-// level, question_count_required 15 -> 15 dari 22 diambil tiap main.
+// Dulu dipakai batch "Soal Campuran" (udah dihapus, diganti batch per-materi di
+// smk_materi.go). Generatornya tetep dipake ulang di level materi yang cocok:
+// SPLDV, jumlah/hasil kali akar kuadrat, kombinasi trig, kombinasi log, median.
 
 func genLinearSystemHard(optionCount int) question {
 	x := rand.IntN(11) - 5
@@ -1148,7 +1623,7 @@ func genLinearSystemHard(optionCount int) question {
 	f := d*x + e*y
 	correct := float64(x)
 	return question{
-		prompt:  fmt.Sprintf("%dx + %dy = %d dan %dx + %dy = %d, nilai x = ?", a, b, c, d, e, f),
+		prompt:  fmt.Sprintf("%s = %d dan %s = %d, nilai x = ?", formatLinearXY(a, b), c, formatLinearXY(d, e), f),
 		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct - 2, correct + 2, correct + 3}, optionCount, true),
 	}
 }
@@ -1162,20 +1637,7 @@ func genQuadraticSumProduct(optionCount int) question {
 	a := rand.IntN(3) + 1
 	b := -a * (r1 + r2)
 	c := a * r1 * r2
-
-	aPrefix := ""
-	if a != 1 {
-		aPrefix = fmt.Sprintf("%d", a)
-	}
-	bSign := "+"
-	if b < 0 {
-		bSign = "-"
-	}
-	cSign := "+"
-	if c < 0 {
-		cSign = "-"
-	}
-	prompt := fmt.Sprintf("%sx² %s %dx %s %d = 0 punya akar x1 dan x2.", aPrefix, bSign, absInt(b), cSign, absInt(c))
+	prompt := fmt.Sprintf("%s = 0 punya akar x1 dan x2.", formatPoly(a, b, c))
 
 	var correct float64
 	if rand.IntN(2) == 0 {
@@ -1247,29 +1709,4 @@ func genStatsMedianHard(optionCount int) question {
 		prompt:  fmt.Sprintf("Median dari data %s adalah?", strings.Join(strs, ", ")),
 		options: buildOptions(correct, []float64{correct - 1, correct + 1, correct - 2, correct + 2, float64(sorted[0])}, optionCount, true),
 	}
-}
-
-func genSMACampuranMixed(optionCount int) question {
-	switch rand.IntN(5) {
-	case 0:
-		return genLinearSystemHard(optionCount)
-	case 1:
-		return genQuadraticSumProduct(optionCount)
-	case 2:
-		return genTrigCombo(optionCount)
-	case 3:
-		return genLogCombo(optionCount)
-	default:
-		return genStatsMedianHard(optionCount)
-	}
-}
-
-func smkCampuranChallenges() []challengeSpec {
-	challenges := make([]challengeSpec, 0, 11)
-	for level := 1; level <= 10; level++ {
-		name := fmt.Sprintf("Campuran Level %d", level)
-		challenges = append(challenges, buildChallenge(name, false, 15, 22, 70, 5, 35, genSMACampuranMixed))
-	}
-	challenges = append(challenges, buildChallenge("Ujian Soal Campuran SMK/SMA", true, 15, 22, 70, 5, 1125, genSMACampuranMixed))
-	return challenges
 }
