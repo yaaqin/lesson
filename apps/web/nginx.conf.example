@@ -1,0 +1,26 @@
+# Server block nginx buat proxy domain lesson.yaaqin.xyz ke container web
+# (bind ke 127.0.0.1:9803 lewat docker-compose.yml). Ganti domain-nya kalau
+# beda. Taruh sebagai file baru di /etc/nginx/sites-available/lesson.yaaqin.xyz, lalu:
+#
+#   sudo ln -s /etc/nginx/sites-available/lesson.yaaqin.xyz /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d lesson.yaaqin.xyz   # otomatis nambahin blok HTTPS + redirect
+#
+# Pastikan DNS A record lesson.yaaqin.xyz udah ngarah ke IP VPS ini
+# sebelum jalanin certbot (verifikasi ACME butuh domain udah resolve).
+
+server {
+    listen 80;
+    server_name lesson.yaaqin.xyz;
+
+    location / {
+        proxy_pass http://127.0.0.1:9803;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}

@@ -1,0 +1,12 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        # Dibaca dari .env di folder ini (lihat .env.production.example).
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?isi NEXT_PUBLIC_API_BASE_URL di .env}
+    restart: unless-stopped
+    # Cuma bind ke localhost -- publik-nya lewat nginx yang udah jalan di VPS
+    # (reverse proxy shared buat semua project), bukan diekspos langsung.
+    ports:
+      - "127.0.0.1:9803:9803"
