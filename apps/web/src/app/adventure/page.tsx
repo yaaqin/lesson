@@ -20,6 +20,7 @@ import {
 } from "@/hooks/use-adventure";
 import { QuestionGuard } from "@/components/question-guard";
 import { NumericKeypad } from "@/components/numeric-keypad";
+import { formatDuration, formatTimePercent } from "@/lib/duration";
 
 type Phase = "lobby" | "loading" | "playing" | "passed" | "failed";
 
@@ -39,14 +40,6 @@ const TIER_BADGE: Record<AdventureTierCode, string> = {
   smk: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
   kampus: "bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400",
 };
-
-function formatDuration(totalSeconds: number) {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  const mmss = `${m.toString().padStart(h > 0 ? 2 : 1, "0")}:${s.toString().padStart(2, "0")}`;
-  return h > 0 ? `${h}:${mmss}` : mmss;
-}
 
 function errorCode(err: unknown) {
   return (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -298,7 +291,12 @@ export default function AdventurePage() {
           ← Jenjang
         </Link>
         <span className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50">Adventure</span>
-        <span className="w-16" />
+        <Link
+          href="/adventure/ranking"
+          className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+        >
+          🏆 Ranking
+        </Link>
       </header>
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 pb-10 sm:px-6">
@@ -508,6 +506,10 @@ function ProgressCard({ state, onStart }: { state: AdventureState; onStart: () =
         <li>❤️ Jatah salah {state.maxFails}x per checkpoint (waktu habis juga dihitung salah). Lewat dari itu, checkpoint diulang dari awal.</li>
         <li>⏱️ Waktu tiap soal beda-beda, ngikutin jenjang asal soalnya.</li>
         <li>🚪 Keluar di tengah jalan = lanjut lagi dari soal pertama checkpoint terakhir.</li>
+        <li>
+          🏆 Ranking: makin jauh checkpoint-mu makin atas. Kalau sama, diadu persentase waktu — tiap sisa jatah salah
+          motong waktumu {state.bonusSecondsPerFail} detik.
+        </li>
       </ul>
 
       {!state.completed && (
@@ -623,6 +625,11 @@ function HistoryRow({
         </div>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
           <span>⏱️ {formatDuration(item.durationSeconds)}</span>
+          <span
+            title={`Waktu dipotong bonus sisa jatah: ${formatDuration(item.adjustedSeconds)} dari ${formatDuration(item.timeAllowedSeconds)} yang disediain`}
+          >
+            ⚡ {formatTimePercent(item.timePercent)} waktu
+          </span>
           <span>
             ✅ {item.correctCount}/{questionsPerCheckpoint}
           </span>
@@ -687,6 +694,16 @@ function CheckpointResultView({
         <Stat label="Sisa jatah" value={`${result.failsRemaining}/${run.maxFails}`} />
       </div>
 
+      {passed && result.timeAllowedSeconds !== undefined && (
+        <p className="max-w-sm text-sm text-zinc-500">
+          Skor waktu ranking: <span className="font-semibold text-black dark:text-zinc-50">
+            {formatTimePercent(result.timePercent ?? 0)}
+          </span>{" "}
+          ({formatDuration(result.adjustedSeconds ?? 0)} dari {formatDuration(result.timeAllowedSeconds)} yang
+          disediain, udah dipotong bonus sisa jatah salah).
+        </p>
+      )}
+
       <div className="flex w-full max-w-sm flex-col gap-2">
         {!result.adventureCompleted && (
           <button
@@ -704,6 +721,11 @@ function CheckpointResultView({
         >
           Kembali ke peta
         </button>
+        {passed && (
+          <Link href="/adventure/ranking" className="py-2 text-sm font-medium text-blue-600 dark:text-blue-400">
+            🏆 Liat ranking
+          </Link>
+        )}
       </div>
     </div>
   );

@@ -37,6 +37,9 @@ const (
 	// Waktu per soal yang diambil dari challenge ujian = total waktu ujian
 	// dibagi jumlah soalnya, dengan batas bawah ini.
 	adventureMinSecondsPerQuestion = 10
+	// Tiap sisa jatah salah yang gak kepake motong waktu jawab segini (skor
+	// waktu leaderboard, lihat adventure_leaderboard.go).
+	AdventureBonusSecondsPerFail = 5
 )
 
 // adventureComposition: jatah soal per jenjang tiap 100 soal (urutan = urutan
@@ -96,14 +99,19 @@ type AdventureQuestion struct {
 }
 
 type AdventureHistoryItem struct {
-	AttemptID       string    `json:"attemptId"`
-	CheckpointNo    int       `json:"checkpointNo"`
-	DurationSeconds int       `json:"durationSeconds"`
-	CorrectCount    int       `json:"correctCount"`
-	FailsRemaining  int       `json:"failsRemaining"`
-	FailedAttempts  int       `json:"failedAttempts"`
-	CompletedAt     time.Time `json:"completedAt"`
-	RolledBack      bool      `json:"rolledBack"`
+	AttemptID       string `json:"attemptId"`
+	CheckpointNo    int    `json:"checkpointNo"`
+	DurationSeconds int    `json:"durationSeconds"`
+	CorrectCount    int    `json:"correctCount"`
+	FailsRemaining  int    `json:"failsRemaining"`
+	FailedAttempts  int    `json:"failedAttempts"`
+	// Waktu yang disediain (jumlah time limit 100 soal), waktu setelah dipotong
+	// bonus sisa jatah, dan persentasenya (makin kecil makin cepat).
+	TimeAllowedSeconds int       `json:"timeAllowedSeconds"`
+	AdjustedSeconds    int       `json:"adjustedSeconds"`
+	TimePercent        float64   `json:"timePercent"`
+	CompletedAt        time.Time `json:"completedAt"`
+	RolledBack         bool      `json:"rolledBack"`
 }
 
 type AdventureState struct {
@@ -111,6 +119,7 @@ type AdventureState struct {
 	TotalCheckpoints       int                    `json:"totalCheckpoints"`
 	QuestionsPerCheckpoint int                    `json:"questionsPerCheckpoint"`
 	MaxFails               int                    `json:"maxFails"`
+	BonusSecondsPerFail    int                    `json:"bonusSecondsPerFail"`
 	Completed              bool                   `json:"completed"`
 	History                []AdventureHistoryItem `json:"history"`
 }
@@ -136,6 +145,10 @@ type AdventureAnswerResult struct {
 	DurationSeconds    int  `json:"durationSeconds,omitempty"`
 	NextCheckpoint     int  `json:"nextCheckpoint,omitempty"`
 	AdventureCompleted bool `json:"adventureCompleted,omitempty"`
+	// Keisi kalau Status passed (skor waktu leaderboard).
+	TimeAllowedSeconds int     `json:"timeAllowedSeconds,omitempty"`
+	AdjustedSeconds    int     `json:"adjustedSeconds,omitempty"`
+	TimePercent        float64 `json:"timePercent,omitempty"`
 }
 
 func (s *Service) ensureAdventureProgress(ctx context.Context, q pgx.Tx, userID string, forUpdate bool) (current int, completed bool, err error) {
@@ -172,7 +185,7 @@ func (s *Service) GetAdventure(ctx context.Context, userID string) (*AdventureSt
 	rows, err := s.db.Query(ctx, `
 		SELECT
 			a.id, a.checkpoint_no, a.correct_count, a.max_fails - a.fails_used,
-			a.started_at, a.completed_at, a.rolled_back_at IS NOT NULL,
+			a.time_allowed_seconds, a.started_at, a.completed_at, a.rolled_back_at IS NOT NULL,
 			(
 				SELECT count(*) FROM adventure_checkpoint_attempts f
 				WHERE f.user_id = a.user_id AND f.checkpoint_no = a.checkpoint_no
@@ -200,10 +213,11 @@ func (s *Service) GetAdventure(ctx context.Context, userID string) (*AdventureSt
 			startedAt time.Time
 		)
 		if err := rows.Scan(&h.AttemptID, &h.CheckpointNo, &h.CorrectCount, &h.FailsRemaining,
-			&startedAt, &h.CompletedAt, &h.RolledBack, &h.FailedAttempts); err != nil {
+			&h.TimeAllowedSeconds, &startedAt, &h.CompletedAt, &h.RolledBack, &h.FailedAttempts); err != nil {
 			return nil, err
 		}
 		h.DurationSeconds = int(h.CompletedAt.Sub(startedAt).Seconds())
+		h.AdjustedSeconds, h.TimePercent = adventureTimeScore(h.DurationSeconds, h.FailsRemaining, h.TimeAllowedSeconds)
 		history = append(history, h)
 	}
 	if err := rows.Err(); err != nil {
@@ -215,6 +229,7 @@ func (s *Service) GetAdventure(ctx context.Context, userID string) (*AdventureSt
 		TotalCheckpoints:       AdventureTotalCheckpoints,
 		QuestionsPerCheckpoint: AdventureQuestionsPerCheckpoint,
 		MaxFails:               AdventureMaxFails,
+		BonusSecondsPerFail:    AdventureBonusSecondsPerFail,
 		Completed:              completed,
 		History:                history,
 	}, nil
@@ -266,7 +281,9 @@ func (s *Service) StartAdventureCheckpoint(ctx context.Context, userID string) (
 
 	snapshot := make([]adventureSnapshotQuestion, len(picked))
 	questions := make([]AdventureQuestion, len(picked))
+	timeAllowed := 0
 	for i, q := range picked {
+		timeAllowed += q.TimeLimitSeconds
 		opts := append([]QuestionOption{}, q.Options...)
 		rand.Shuffle(len(opts), func(a, b int) { opts[a], opts[b] = opts[b], opts[a] })
 		values := make([]float64, len(opts))
@@ -290,10 +307,10 @@ func (s *Service) StartAdventureCheckpoint(ctx context.Context, userID string) (
 
 	var attemptID string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO adventure_checkpoint_attempts (user_id, checkpoint_no, questions_snapshot, max_fails)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO adventure_checkpoint_attempts (user_id, checkpoint_no, questions_snapshot, max_fails, time_allowed_seconds)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
-	`, userID, checkpoint, snapshotJSON, AdventureMaxFails).Scan(&attemptID); err != nil {
+	`, userID, checkpoint, snapshotJSON, AdventureMaxFails, timeAllowed).Scan(&attemptID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -321,19 +338,19 @@ func (s *Service) AnswerAdventureQuestion(ctx context.Context, userID, attemptID
 	defer tx.Rollback(ctx)
 
 	var (
-		checkpoint, currentIndex, correctCount, failsUsed, maxFails int
-		status                                                      string
-		snapshotRaw                                                 []byte
-		questionStartedAt, startedAt                                time.Time
+		checkpoint, currentIndex, correctCount, failsUsed, maxFails, timeAllowed int
+		status                                                                   string
+		snapshotRaw                                                              []byte
+		questionStartedAt, startedAt                                             time.Time
 	)
 	err = tx.QueryRow(ctx, `
 		SELECT checkpoint_no, status, questions_snapshot, current_index, correct_count,
-			fails_used, max_fails, question_started_at, started_at
+			fails_used, max_fails, time_allowed_seconds, question_started_at, started_at
 		FROM adventure_checkpoint_attempts
 		WHERE id = $1 AND user_id = $2
 		FOR UPDATE
 	`, attemptID, userID).Scan(&checkpoint, &status, &snapshotRaw, &currentIndex, &correctCount,
-		&failsUsed, &maxFails, &questionStartedAt, &startedAt)
+		&failsUsed, &maxFails, &timeAllowed, &questionStartedAt, &startedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrAttemptNotFound
@@ -419,6 +436,8 @@ func (s *Service) AnswerAdventureQuestion(ctx context.Context, userID, attemptID
 		}
 		res.NextCheckpoint = checkpoint + 1
 		res.AdventureCompleted = completedNow
+		res.TimeAllowedSeconds = timeAllowed
+		res.AdjustedSeconds, res.TimePercent = adventureTimeScore(res.DurationSeconds, res.FailsRemaining, timeAllowed)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

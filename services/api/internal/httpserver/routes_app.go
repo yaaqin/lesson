@@ -25,6 +25,7 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 
 	// Adventure (mode jalan terus lintas jenjang, lihat curriculumsvc/adventure.go)
 	mux.HandleFunc("GET /app/adventure", s.handleGetAdventure)
+	mux.HandleFunc("GET /app/adventure/leaderboard", s.handleGetAdventureLeaderboard)
 	mux.HandleFunc("POST /app/adventure/start", s.handleStartAdventure)
 	mux.HandleFunc("POST /app/adventure/rollback", s.handleRollbackAdventure)
 	mux.HandleFunc("POST /app/adventure/attempts/{attemptId}/answer", s.handleAnswerAdventure)

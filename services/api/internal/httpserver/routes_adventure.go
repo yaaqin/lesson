@@ -22,6 +22,23 @@ func (s *Server) handleGetAdventure(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, state)
 }
 
+// handleGetAdventureLeaderboard: top 100 journey terjauh, bisa diliat semua
+// user yang login.
+func (s *Server) handleGetAdventureLeaderboard(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	board, err := s.curriculum.GetAdventureLeaderboard(r.Context(), claims.Subject)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, board)
+}
+
 func (s *Server) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 	claims, ok := s.authenticate(r)
 	if !ok {
