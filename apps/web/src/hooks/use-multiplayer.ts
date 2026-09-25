@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { privateApi } from "@/lib/http";
 import type { UserAvatar } from "@/hooks/use-curriculum";
 
@@ -126,9 +126,53 @@ export function useMultiplayerOptionsQuery() {
 }
 
 export function useCreateRoomMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateRoomInput) =>
       (await privateApi.post<{ code: string }>("/app/multiplayer/rooms", input)).data,
+    // Bikin room motong 1 kesempatan (user non-premium).
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["multiplayer", "quota"] });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
+// ---------- Kuota bikin room ----------
+// Premium = tanpa batas. User biasa punya roomQuota (jatah awal pas daftar,
+// diatur admin) dan bisa minta tambahan ke admin -- 1 permintaan pending.
+
+export type RoomQuotaRequest = {
+  id: string;
+  message: string;
+  status: "pending" | "approved" | "rejected";
+  grantedQuota: number | null;
+  createdAt: string;
+  decidedAt: string | null;
+};
+
+export type RoomQuotaStatus = {
+  isPremium: boolean;
+  roomQuota: number;
+  latestRequest: RoomQuotaRequest | null;
+};
+
+export const ROOM_QUOTA_REQUEST_MAX_LENGTH = 500;
+
+export function useRoomQuotaQuery() {
+  return useQuery({
+    queryKey: ["multiplayer", "quota"],
+    queryFn: async () => (await privateApi.get<RoomQuotaStatus>("/app/multiplayer/quota")).data,
+    staleTime: 0,
+  });
+}
+
+export function useRoomQuotaRequestMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (message: string) =>
+      (await privateApi.post<RoomQuotaRequest>("/app/multiplayer/quota-requests", { message })).data,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["multiplayer", "quota"] }),
   });
 }
 

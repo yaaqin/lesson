@@ -11,13 +11,22 @@ import {
 import { BackButton } from "@/components/back-button";
 
 // Batas nilai sama dengan validasi server (curriculumsvc.MultiplayerConfig).
-const FIELDS: { key: keyof MultiplayerConfig; label: string; hint: string; min: number; max: number }[] = [
+const FIELDS: { key: keyof MultiplayerConfig; label: string; hint: string; min: number; max: number; unit: string }[] = [
+  {
+    key: "initialRoomQuota",
+    label: "Kesempatan awal bikin room",
+    hint: "Jatah bikin room buat user yang daftar SETELAH disimpan. User lama gak ikut berubah (atur per user di Daftar User).",
+    min: 0,
+    max: 100,
+    unit: "×",
+  },
   {
     key: "classicCooldownSeconds",
     label: "Cooldown Klasik",
     hint: "Jeda antar soal mode Klasik: angka hitung mundur gede + kunci jawaban & poin soal barusan.",
     min: 1,
     max: 15,
+    unit: "dtk",
   },
   {
     key: "raceCooldownSeconds",
@@ -25,6 +34,7 @@ const FIELDS: { key: keyof MultiplayerConfig; label: string; hint: string; min: 
     hint: "Jeda antar soal mode Adu Cepat.",
     min: 1,
     max: 15,
+    unit: "dtk",
   },
   {
     key: "raceWinnerRevealSeconds",
@@ -32,6 +42,7 @@ const FIELDS: { key: keyof MultiplayerConfig; label: string; hint: string; min: 
     hint: "Adu Cepat (kalau room-nya nampilin yang paling cepat): nama yang jawab benar duluan muncul segini lama sebelum cooldown.",
     min: 1,
     max: 5,
+    unit: "dtk",
   },
   {
     key: "resultsCountdownSeconds",
@@ -39,6 +50,7 @@ const FIELDS: { key: keyof MultiplayerConfig; label: string; hint: string; min: 
     hint: "Adu Cepat yang hasilnya dirahasiain: hitung mundur setelah host klik \"Tampilkan hasil\".",
     min: 1,
     max: 15,
+    unit: "dtk",
   },
 ];
 
@@ -76,7 +88,7 @@ export default function AdminMultiplayerPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">Pengaturan Multiplayer</h1>
           </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-500">
-            Berlaku buat room yang dibikin setelah disimpan. Room yang lagi jalan tetap pakai pengaturan lama.
+            Jeda berlaku buat room yang dibikin setelah disimpan. Room yang lagi jalan tetap pakai pengaturan lama.
           </p>
         </div>
 
@@ -119,7 +131,7 @@ function ConfigForm({ initial }: { initial: MultiplayerConfig }) {
           <div className="flex shrink-0 items-center gap-2">
             <Stepper disabled={config[f.key] <= f.min} onClick={() => set(f.key, config[f.key] - 1)} label="−" />
             <span className="w-16 text-center text-lg font-semibold text-black tabular-nums dark:text-zinc-50">
-              {config[f.key]} dtk
+              {config[f.key]} {f.unit}
             </span>
             <Stepper disabled={config[f.key] >= f.max} onClick={() => set(f.key, config[f.key] + 1)} label="+" />
           </div>

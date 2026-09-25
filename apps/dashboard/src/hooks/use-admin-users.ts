@@ -9,6 +9,7 @@ export type AdminUserListItem = {
   longestStreak: number;
   livesRemaining: number;
   isPremium: boolean;
+  roomQuota: number;
   createdAt: string;
 };
 
@@ -31,8 +32,10 @@ export type AdminUserDetail = {
   livesLastResetAt: string;
   totalAttempts: number;
   passedAttempts: number;
-  // Premium: boleh bikin room multiplayer di apps/web.
+  // Premium: tag spesial -- bikin room multiplayer tanpa batas.
   isPremium: boolean;
+  // Sisa kesempatan bikin room (user non-premium).
+  roomQuota: number;
   createdAt: string;
 };
 
@@ -75,6 +78,17 @@ export function useSetUserPremiumMutation(userId: string) {
 
   return useMutation({
     mutationFn: async (isPremium: boolean) => privateApi.put(`/admin/users/${userId}/premium`, { isPremium }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+export function useSetUserRoomQuotaMutation(userId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (roomQuota: number) => privateApi.put(`/admin/users/${userId}/room-quota`, { roomQuota }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },

@@ -15,6 +15,9 @@ type MultiplayerConfig struct {
 	RaceCooldownSeconds     int `json:"raceCooldownSeconds"`
 	RaceWinnerRevealSeconds int `json:"raceWinnerRevealSeconds"`
 	ResultsCountdownSeconds int `json:"resultsCountdownSeconds"`
+	// InitialRoomQuota: jatah bikin room buat user yang BARU daftar (dipakai
+	// authsvc pas insert user). User lama gak ikut berubah.
+	InitialRoomQuota int `json:"initialRoomQuota"`
 }
 
 var ErrInvalidMultiplayerConfig = errors.New("pengaturan multiplayer gak valid")
@@ -25,12 +28,14 @@ var DefaultMultiplayerConfig = MultiplayerConfig{
 	RaceCooldownSeconds:     3,
 	RaceWinnerRevealSeconds: 1,
 	ResultsCountdownSeconds: 5,
+	InitialRoomQuota:        3,
 }
 
 func (c MultiplayerConfig) Validate() error {
 	inRange := func(v, min, max int) bool { return v >= min && v <= max }
 	if !inRange(c.ClassicCooldownSeconds, 1, 15) || !inRange(c.RaceCooldownSeconds, 1, 15) ||
-		!inRange(c.RaceWinnerRevealSeconds, 1, 5) || !inRange(c.ResultsCountdownSeconds, 1, 15) {
+		!inRange(c.RaceWinnerRevealSeconds, 1, 5) || !inRange(c.ResultsCountdownSeconds, 1, 15) ||
+		!inRange(c.InitialRoomQuota, 0, MaxRoomQuotaGrant) {
 		return ErrInvalidMultiplayerConfig
 	}
 	return nil
@@ -40,9 +45,10 @@ func (s *Service) GetMultiplayerConfig(ctx context.Context) (*MultiplayerConfig,
 	var c MultiplayerConfig
 	err := s.db.QueryRow(ctx, `
 		SELECT classic_cooldown_seconds, race_cooldown_seconds,
-			race_winner_reveal_seconds, results_countdown_seconds
+			race_winner_reveal_seconds, results_countdown_seconds, initial_room_quota
 		FROM multiplayer_config WHERE id
-	`).Scan(&c.ClassicCooldownSeconds, &c.RaceCooldownSeconds, &c.RaceWinnerRevealSeconds, &c.ResultsCountdownSeconds)
+	`).Scan(&c.ClassicCooldownSeconds, &c.RaceCooldownSeconds, &c.RaceWinnerRevealSeconds, &c.ResultsCountdownSeconds,
+		&c.InitialRoomQuota)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c = DefaultMultiplayerConfig
 		return &c, nil
@@ -59,15 +65,17 @@ func (s *Service) AdminUpdateMultiplayerConfig(ctx context.Context, c Multiplaye
 	}
 	_, err := s.db.Exec(ctx, `
 		INSERT INTO multiplayer_config (id, classic_cooldown_seconds, race_cooldown_seconds,
-			race_winner_reveal_seconds, results_countdown_seconds, updated_at)
-		VALUES (true, $1, $2, $3, $4, now())
+			race_winner_reveal_seconds, results_countdown_seconds, initial_room_quota, updated_at)
+		VALUES (true, $1, $2, $3, $4, $5, now())
 		ON CONFLICT (id) DO UPDATE SET
 			classic_cooldown_seconds = EXCLUDED.classic_cooldown_seconds,
 			race_cooldown_seconds = EXCLUDED.race_cooldown_seconds,
 			race_winner_reveal_seconds = EXCLUDED.race_winner_reveal_seconds,
 			results_countdown_seconds = EXCLUDED.results_countdown_seconds,
+			initial_room_quota = EXCLUDED.initial_room_quota,
 			updated_at = now()
-	`, c.ClassicCooldownSeconds, c.RaceCooldownSeconds, c.RaceWinnerRevealSeconds, c.ResultsCountdownSeconds)
+	`, c.ClassicCooldownSeconds, c.RaceCooldownSeconds, c.RaceWinnerRevealSeconds, c.ResultsCountdownSeconds,
+		c.InitialRoomQuota)
 	return err
 }
 

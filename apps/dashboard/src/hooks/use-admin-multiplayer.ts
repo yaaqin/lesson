@@ -8,6 +8,8 @@ export type MultiplayerConfig = {
   raceCooldownSeconds: number;
   raceWinnerRevealSeconds: number;
   resultsCountdownSeconds: number;
+  // Jatah bikin room buat user yang daftar SETELAH disimpan.
+  initialRoomQuota: number;
 };
 
 export function useMultiplayerConfigQuery() {

@@ -86,8 +86,10 @@ export type MeInfo = {
   nickname: string | null;
   avatar: UserAvatar;
   themePreference: "light" | "dark" | "system";
-  // Premium: boleh bikin room multiplayer (diset admin dari dashboard).
+  // Premium: tag spesial dari admin -- bikin room multiplayer tanpa batas.
   isPremium: boolean;
+  // Sisa kesempatan bikin room buat user non-premium.
+  roomQuota: number;
 };
 
 export type UserAvatar = {

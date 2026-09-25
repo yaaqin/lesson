@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
@@ -8,6 +9,7 @@ import {
   errorCode,
   useCreateRoomMutation,
   useMultiplayerOptionsQuery,
+  useRoomQuotaQuery,
   type MultiplayerFormat,
   type MultiplayerMode,
   type MultiplayerSourceBatch,
@@ -16,7 +18,7 @@ import { BackButton } from "@/components/back-button";
 import { FORMAT_LABEL, MODE_INFO, TIER_BADGE } from "@/lib/multiplayer";
 
 const CREATE_ERROR_TEXT: Record<string, string> = {
-  not_premium: "Bikin room cuma bisa buat user Premium.",
+  no_room_quota: "Kesempatan bikin room kamu udah habis.",
   not_enough_questions: "Soal di racikan ini gak cukup. Tambah batch lain atau kurangin jumlah soal.",
   already_hosting: "Game kamu yang sebelumnya masih jalan. Tunggu selesai dulu ya.",
   invalid_settings: "Pengaturan room gak valid.",
@@ -29,6 +31,7 @@ export default function CreateRoomPage() {
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const me = useRequireNickname().data;
   const optionsQuery = useMultiplayerOptionsQuery();
+  const quotaQuery = useRoomQuotaQuery();
   const createMutation = useCreateRoomMutation();
 
   const [mode, setMode] = useState<MultiplayerMode>("classic");
@@ -45,11 +48,18 @@ export default function CreateRoomPage() {
     if (session === null) router.replace("/login");
   }, [hasHydrated, session, router]);
 
-  if (!hasHydrated || !session || !me) {
-    return <Centered text="Memuat…" />;
+  const quota = quotaQuery.data;
+  if (!hasHydrated || !session || !me || !quota) {
+    return <Centered text={quotaQuery.isError ? "Gagal memuat sisa kesempatan." : "Memuat…"} />;
   }
-  if (!me.isPremium) {
-    return <Centered text="Bikin room cuma bisa buat user Premium." />;
+  if (!quota.isPremium && quota.roomQuota === 0) {
+    return (
+      <Centered text="Kesempatan bikin room kamu udah habis. Minta tambahan ke admin dulu ya.">
+        <Link href="/multiplayer" className="rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background">
+          Minta tambahan kesempatan
+        </Link>
+      </Centered>
+    );
   }
 
   const options = optionsQuery.data;
@@ -223,6 +233,11 @@ export default function CreateRoomPage() {
       <div className="fixed inset-x-0 bottom-0 border-t border-black/[.08] bg-white/95 px-4 py-3 backdrop-blur dark:border-white/[.145] dark:bg-black/90">
         <div className="mx-auto flex w-full max-w-xl flex-col gap-2">
           {error && <p className="text-center text-sm text-red-500">{error}</p>}
+          {!quota.isPremium && !error && (
+            <p className="text-center text-xs text-zinc-500">
+              Bikin room ini makai 1 dari {quota.roomQuota} kesempatanmu.
+            </p>
+          )}
           {batchIds.length > 0 && selectedUsable < questionCount && !error && (
             <p className="text-center text-xs text-amber-600 dark:text-amber-400">
               Bank soal terpilih cuma {selectedUsable}, butuh {questionCount}. Tambah batch lagi.
@@ -244,10 +259,11 @@ export default function CreateRoomPage() {
   );
 }
 
-function Centered({ text }: { text: string }) {
+function Centered({ text, children }: { text: string; children?: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 text-center dark:bg-black">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-50 px-6 text-center dark:bg-black">
       <p className="text-zinc-500 dark:text-zinc-500">{text}</p>
+      {children}
     </div>
   );
 }

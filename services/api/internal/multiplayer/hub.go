@@ -112,15 +112,14 @@ func (h *Hub) Options(ctx context.Context) (*SourceOptions, error) {
 	}, nil
 }
 
-// CreateRoom: cuma user premium. Soal langsung diambil di sini (bukan pas
-// mulai) biar racikan yang soalnya kurang ketauan dari awal.
+// CreateRoom: user premium bebas bikin; user biasa motong 1 kesempatan
+// (users.room_quota) -- dipotong paling akhir, jadi room yang gagal kebikin
+// gak makan kuota. Soal langsung diambil di sini (bukan pas mulai) biar
+// racikan yang soalnya kurang ketauan dari awal.
 func (h *Hub) CreateRoom(ctx context.Context, hostID string, settings Settings) (string, error) {
 	host, err := h.curriculum.GetPlayerProfile(ctx, hostID)
 	if err != nil {
 		return "", err
-	}
-	if !host.IsPremium {
-		return "", ErrNotPremium
 	}
 	if err := settings.validate(); err != nil {
 		return "", err
@@ -162,15 +161,25 @@ func (h *Hub) CreateRoom(ctx context.Context, hostID string, settings Settings) 
 		existing = append(existing, r)
 	}
 	h.mu.Unlock()
+	lobbies := []*Room{}
 	for _, r := range existing {
 		if active, inLobby := r.isActiveHostedBy(hostID); active {
 			if !inLobby {
 				return "", ErrAlreadyHosting
 			}
-			r.mu.Lock()
-			r.closeLocked("host_closed")
-			r.mu.Unlock()
+			lobbies = append(lobbies, r)
 		}
+	}
+
+	if !host.IsPremium {
+		if err := h.curriculum.ConsumeRoomQuota(ctx, hostID); err != nil {
+			return "", err
+		}
+	}
+	for _, r := range lobbies {
+		r.mu.Lock()
+		r.closeLocked("host_closed")
+		r.mu.Unlock()
 	}
 
 	h.mu.Lock()

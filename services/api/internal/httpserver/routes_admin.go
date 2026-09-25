@@ -61,7 +61,15 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("POST /admin/users/{id}/lives/reset", s.handleAdminResetUserLives)
 	mux.HandleFunc("PUT /admin/users/{id}/premium", s.handleAdminSetUserPremium)
 
-	// Jeda antar soal multiplayer (cooldown, pamer pemenang, countdown hasil).
+	// Kuota bikin room multiplayer: set langsung per user + antrian
+	// permintaan tambahan dari user (approve = tambah N kesempatan).
+	mux.HandleFunc("PUT /admin/users/{id}/room-quota", s.handleAdminSetUserRoomQuota)
+	mux.HandleFunc("GET /admin/room-quota-requests", s.handleAdminListRoomQuotaRequests)
+	mux.HandleFunc("POST /admin/room-quota-requests/{id}/approve", s.handleAdminApproveRoomQuotaRequest)
+	mux.HandleFunc("POST /admin/room-quota-requests/{id}/reject", s.handleAdminRejectRoomQuotaRequest)
+
+	// Jeda antar soal multiplayer (cooldown, pamer pemenang, countdown hasil)
+	// + jatah awal bikin room buat user baru.
 	mux.HandleFunc("GET /admin/multiplayer/config", s.handleAdminGetMultiplayerConfig)
 	mux.HandleFunc("PUT /admin/multiplayer/config", s.handleAdminUpdateMultiplayerConfig)
 }
@@ -429,4 +437,92 @@ func (s *Server) handleAdminSetUserPremium(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type setRoomQuotaRequest struct {
+	RoomQuota int `json:"roomQuota"`
+}
+
+func (s *Server) handleAdminSetUserRoomQuota(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req setRoomQuotaRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	if err := s.curriculum.AdminSetUserRoomQuota(r.Context(), r.PathValue("id"), req.RoomQuota); err != nil {
+		writeRoomQuotaAdminError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminListRoomQuotaRequests(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	result, err := s.curriculum.AdminListRoomQuotaRequests(r.Context(), r.URL.Query().Get("status"), page, pageSize)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+type approveRoomQuotaRequest struct {
+	Grant int `json:"grant"`
+}
+
+func (s *Server) handleAdminApproveRoomQuotaRequest(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticateRole(r, "admin", "superadmin")
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req approveRoomQuotaRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	if err := s.curriculum.AdminApproveRoomQuotaRequest(r.Context(), r.PathValue("id"), claims.Subject, req.Grant); err != nil {
+		writeRoomQuotaAdminError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminRejectRoomQuotaRequest(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticateRole(r, "admin", "superadmin")
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if err := s.curriculum.AdminRejectRoomQuotaRequest(r.Context(), r.PathValue("id"), claims.Subject); err != nil {
+		writeRoomQuotaAdminError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeRoomQuotaAdminError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, curriculumsvc.ErrInvalidQuotaAmount):
+		writeError(w, http.StatusBadRequest, "invalid_amount")
+	case errors.Is(err, curriculumsvc.ErrQuotaRequestDecided):
+		writeError(w, http.StatusConflict, "already_decided")
+	case errors.Is(err, curriculumsvc.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found")
+	default:
+		writeError(w, http.StatusInternalServerError, "internal_error")
+	}
 }

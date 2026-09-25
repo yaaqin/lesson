@@ -11,6 +11,7 @@ import {
   useRegistrations,
 } from "@/store/org-registrations-store";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
+import { useRoomQuotaRequestsQuery } from "@/hooks/use-admin-room-quota";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -18,6 +19,9 @@ export default function AdminDashboardPage() {
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const registrations = useRegistrations();
   const logoutMutation = useLogoutMutation();
+  // Cuma buat angka badge "menunggu" di kartu Permintaan Bikin Room.
+  const quotaRequestsQuery = useRoomQuotaRequestsQuery({ status: "pending", page: 1, pageSize: 1 });
+  const pendingQuotaRequests = quotaRequestsQuery.data?.pendingCount ?? 0;
 
   useEffect(() => {
     if (!hasHydrated) return; // tunggu localStorage kebaca dulu, jangan buru-buru redirect
@@ -173,12 +177,29 @@ export default function AdminDashboardPage() {
         </Link>
 
         <Link
+          href="/admin/permintaan-room"
+          className="flex flex-col gap-1 rounded-2xl border border-black/[.08] bg-white p-5 transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
+        >
+          <span className="flex items-center gap-2 font-semibold text-black dark:text-zinc-50">
+            Permintaan Bikin Room →
+            {pendingQuotaRequests > 0 && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                {pendingQuotaRequests} menunggu
+              </span>
+            )}
+          </span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-500">
+            User minta tambahan kesempatan bikin room multiplayer. Setujui sambil nentuin berapa kali, atau tolak.
+          </span>
+        </Link>
+
+        <Link
           href="/admin/multiplayer"
           className="flex flex-col gap-1 rounded-2xl border border-black/[.08] bg-white p-5 transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
         >
           <span className="font-semibold text-black dark:text-zinc-50">Pengaturan Multiplayer →</span>
           <span className="text-sm text-zinc-500 dark:text-zinc-500">
-            Atur lama cooldown antar soal, pamer yang paling cepat, dan countdown hasil akhir.
+            Atur kesempatan awal bikin room buat user baru, cooldown antar soal, pamer yang paling cepat, dan countdown hasil akhir.
           </span>
         </Link>
 

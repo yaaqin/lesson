@@ -19,6 +19,65 @@ func registerMultiplayerRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("POST /app/multiplayer/rooms", s.handleCreateMultiplayerRoom)
 	mux.HandleFunc("POST /app/multiplayer/rooms/{code}/join", s.handleJoinMultiplayerRoom)
 	mux.HandleFunc("GET /app/multiplayer/ws", s.handleMultiplayerWS)
+
+	// Kuota bikin room: sisa kesempatan + minta tambahan ke admin.
+	mux.HandleFunc("GET /app/multiplayer/quota", s.handleGetRoomQuota)
+	mux.HandleFunc("POST /app/multiplayer/quota-requests", s.handleCreateRoomQuotaRequest)
+}
+
+func (s *Server) handleGetRoomQuota(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	status, err := s.curriculum.GetRoomQuotaStatus(r.Context(), claims.Subject)
+	if err != nil {
+		if errors.Is(err, curriculumsvc.ErrNotFound) {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+type createRoomQuotaRequestBody struct {
+	Message string `json:"message"`
+}
+
+func (s *Server) handleCreateRoomQuotaRequest(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var body createRoomQuotaRequestBody
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	req, err := s.curriculum.CreateRoomQuotaRequest(r.Context(), claims.Subject, body.Message)
+	if err != nil {
+		switch {
+		case errors.Is(err, curriculumsvc.ErrInvalidQuotaRequest):
+			writeError(w, http.StatusBadRequest, "invalid_message")
+		case errors.Is(err, curriculumsvc.ErrRoomQuotaPending):
+			writeError(w, http.StatusConflict, "request_pending")
+		case errors.Is(err, curriculumsvc.ErrAlreadyPremium):
+			writeError(w, http.StatusConflict, "already_premium")
+		case errors.Is(err, curriculumsvc.ErrNotFound):
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, req)
 }
 
 func (s *Server) handleMultiplayerOptions(w http.ResponseWriter, r *http.Request) {
@@ -89,8 +148,8 @@ func (s *Server) handleMultiplayerWS(w http.ResponseWriter, r *http.Request) {
 
 func writeMultiplayerError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, multiplayer.ErrNotPremium):
-		writeError(w, http.StatusForbidden, "not_premium")
+	case errors.Is(err, multiplayer.ErrNoRoomQuota):
+		writeError(w, http.StatusForbidden, "no_room_quota")
 	case errors.Is(err, multiplayer.ErrInvalidSettings):
 		writeError(w, http.StatusBadRequest, "invalid_settings")
 	case errors.Is(err, multiplayer.ErrInvalidSource):

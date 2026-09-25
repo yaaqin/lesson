@@ -58,7 +58,6 @@ const (
 var SecondsPerQuestionOptions = []int{10, 15, 20, 30, 45, 60}
 
 var (
-	ErrNotPremium         = errors.New("cuma user premium yang bisa bikin room")
 	ErrInvalidSettings    = errors.New("pengaturan room gak valid")
 	ErrInvalidSource      = errors.New("batch sumber soal gak valid")
 	ErrRoomNotFound       = errors.New("room gak ketemu")
@@ -68,6 +67,7 @@ var (
 	ErrAlreadyHosting     = errors.New("masih ada game kamu yang lagi jalan")
 	ErrNicknameRequired   = curriculumsvc.ErrNicknameRequired
 	ErrNotEnoughQuestions = curriculumsvc.ErrNotEnoughBank
+	ErrNoRoomQuota        = curriculumsvc.ErrNoRoomQuota
 	errInvalidTicket      = errors.New("ticket gak valid")
 )
 

@@ -1,5 +1,5 @@
-// Label user premium (boleh bikin room multiplayer) -- dipasang di sebelah
-// nickname biar keliatan beda dari user lain.
+// Tag spesial user premium (dikasih admin: bikin room multiplayer tanpa
+// batas) -- dipasang di sebelah nickname biar keliatan beda dari user lain.
 export function PremiumBadge({ size = "sm" }: { size?: "xs" | "sm" }) {
   return (
     <span

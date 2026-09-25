@@ -126,9 +126,11 @@ func (s *Service) LoginWithGoogleCode(ctx context.Context, code string) (*TokenP
 			if displayName == "" {
 				displayName = info.Email
 			}
+			// room_quota: jatah awal bikin room multiplayer, diatur admin di
+			// multiplayer_config (migrations/0014).
 			if err := s.db.QueryRow(ctx, `
-				INSERT INTO users (email, display_name, role)
-				VALUES ($1, $2, 'student')
+				INSERT INTO users (email, display_name, role, room_quota)
+				VALUES ($1, $2, 'student', COALESCE((SELECT initial_room_quota FROM multiplayer_config WHERE id), 3))
 				RETURNING id
 			`, info.Email, displayName).Scan(&userID); err != nil {
 				return nil, err

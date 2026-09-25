@@ -61,6 +61,15 @@ const columns = [
       </span>
     ),
   }),
+  columnHelper.display({
+    id: "roomQuota",
+    header: "Kuota room",
+    cell: ({ row }) => (
+      <span className="text-sm text-zinc-700 tabular-nums dark:text-zinc-300">
+        {row.original.isPremium ? "∞" : `${row.original.roomQuota}×`}
+      </span>
+    ),
+  }),
   columnHelper.accessor("createdAt", {
     header: "Terdaftar",
     cell: (info) => (

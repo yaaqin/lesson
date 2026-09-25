@@ -8,6 +8,8 @@ import {
   useAdminUserDetailQuery,
   useResetUserLivesMutation,
   useSetUserPremiumMutation,
+  useSetUserRoomQuotaMutation,
+  type AdminUserDetail,
 } from "@/hooks/use-admin-users";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
@@ -164,8 +166,8 @@ export default function AdminUserDetailPage() {
                 </span>
                 <span className="text-xs text-zinc-500 dark:text-zinc-500">
                   {user.isPremium
-                    ? "Aktif — user ini bisa bikin room multiplayer."
-                    : "Belum premium — cuma bisa gabung ke room orang lain."}
+                    ? "Aktif — tag spesial, user ini bisa bikin room multiplayer tanpa batas."
+                    : "Belum premium — bikin room makai kuota di bawah."}
                 </span>
                 {premiumMutation.isError && (
                   <span className="text-xs text-red-500">Gagal ngubah status premium, coba lagi.</span>
@@ -184,6 +186,8 @@ export default function AdminUserDetailPage() {
                 {premiumMutation.isPending ? "Menyimpan…" : user.isPremium ? "Cabut premium" : "Jadikan premium"}
               </button>
             </div>
+
+            <RoomQuotaCard key={user.roomQuota} user={user} />
 
             <div className="flex flex-col gap-2 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-900">
               <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-500">
@@ -207,6 +211,56 @@ export default function AdminUserDetailPage() {
           onCancel={() => setShowConfirm(false)}
         />
       )}
+    </div>
+  );
+}
+
+// RoomQuotaCard: sisa kesempatan bikin room multiplayer -- admin bisa set
+// langsung (gak ngaruh kalau user-nya premium).
+function RoomQuotaCard({ user }: { user: AdminUserDetail }) {
+  const [value, setValue] = useState(String(user.roomQuota));
+  const mutation = useSetUserRoomQuotaMutation(user.id);
+  const parsed = Number(value);
+  const valid = value !== "" && Number.isInteger(parsed) && parsed >= 0 && parsed <= 1000;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-900">
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-500">Kuota Bikin Room</span>
+        <span className="text-3xl font-bold text-black tabular-nums dark:text-zinc-50">
+          {user.isPremium ? "∞" : `${user.roomQuota}×`}
+        </span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-500">
+          {user.isPremium
+            ? `User premium gak kepotong kuota (sisa kuota biasanya: ${user.roomQuota}×).`
+            : "Berkurang 1 tiap user bikin room multiplayer."}
+        </span>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) mutation.mutate(parsed);
+        }}
+        className="flex items-center gap-2"
+      >
+        <input
+          type="number"
+          min={0}
+          max={1000}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Kuota bikin room"
+          className="w-24 rounded-xl border border-black/[.08] bg-zinc-50 px-3 py-1.5 text-sm text-black outline-none focus:border-blue-400 dark:border-white/[.145] dark:bg-black dark:text-zinc-50"
+        />
+        <button
+          type="submit"
+          disabled={!valid || parsed === user.roomQuota || mutation.isPending}
+          className="rounded-full bg-foreground px-4 py-1.5 text-xs font-medium text-background disabled:opacity-40"
+        >
+          {mutation.isPending ? "Menyimpan…" : "Set kuota"}
+        </button>
+        {mutation.isError && <span className="text-xs text-red-500">Gagal, coba lagi.</span>}
+      </form>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
@@ -40,11 +41,19 @@ export default function ProfilePage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 pb-10">
-        {me.isPremium && (
+        {me.isPremium ? (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-            <span className="text-sm text-amber-800 dark:text-amber-300">Kamu bisa bikin room multiplayer.</span>
+            <span className="text-sm text-amber-800 dark:text-amber-300">Kamu bisa bikin room multiplayer tanpa batas.</span>
             <PremiumBadge />
           </div>
+        ) : (
+          <Link
+            href="/multiplayer"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.08] bg-white px-4 py-3 dark:border-white/[.145] dark:bg-zinc-900"
+          >
+            <span className="text-sm text-zinc-600 dark:text-zinc-400">Sisa kesempatan bikin room multiplayer</span>
+            <span className="text-lg font-bold text-violet-600 tabular-nums dark:text-violet-400">{me.roomQuota}×</span>
+          </Link>
         )}
 
         <div className="rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.145] dark:bg-zinc-900">

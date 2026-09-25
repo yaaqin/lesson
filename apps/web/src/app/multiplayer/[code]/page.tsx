@@ -277,8 +277,9 @@ function Lobby({ state, send }: { state: RoomState; send: (msg: ClientMessage) =
             <UserAvatar avatar={p.avatar} size="sm" />
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               <span className="truncate text-sm font-medium text-black dark:text-zinc-50">@{p.nickname}</span>
+              {p.isHost && <RoomAdminBadge />}
               {p.isPremium && <PremiumBadge size="xs" />}
-              {p.isHost && <span className="text-xs text-zinc-500">· host{p.playing ? "" : " (nonton)"}</span>}
+              {p.isHost && !p.playing && <span className="text-xs text-zinc-500">(nonton)</span>}
               {p.userId === you.userId && <span className="text-xs text-zinc-400">(kamu)</span>}
               {!p.connected && <span className="text-xs text-zinc-400">· offline</span>}
             </span>
@@ -614,6 +615,7 @@ function Results({ state, onExit }: { state: RoomState; onExit: () => void }) {
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm font-semibold text-black dark:text-zinc-50">@{r.player.nickname}</span>
+                  {r.player.userId === state.room.hostId && <RoomAdminBadge />}
                   {r.player.isPremium && <PremiumBadge size="xs" />}
                   {r.left && <span className="text-xs text-zinc-400">(keluar)</span>}
                 </span>
@@ -663,6 +665,15 @@ function Results({ state, onExit }: { state: RoomState; onExit: () => void }) {
         </button>
       </div>
     </>
+  );
+}
+
+// Tag in-game buat yang bikin room (beda dari tag Premium yang dikasih admin).
+function RoomAdminBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-100 px-1.5 py-px text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+      🛡️ Room Admin
+    </span>
   );
 }
 
