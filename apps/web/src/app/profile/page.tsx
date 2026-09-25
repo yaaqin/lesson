@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useRequireNickname } from "@/hooks/use-profile";
 import { ProfileForm } from "@/components/profile-form";
+import { InstallAppButton } from "@/components/install-app";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -50,6 +51,8 @@ export default function ProfilePage() {
           <Stat label="Streak terlama" value={`${me.longestStreak}`} />
           <Stat label="Nyawa" value={`❤️ ${me.livesRemaining}`} />
         </div>
+
+        <InstallAppButton />
       </main>
     </div>
   );

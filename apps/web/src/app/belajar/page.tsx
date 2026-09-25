@@ -8,6 +8,7 @@ import { useLogoutMutation } from "@/hooks/use-auth";
 import { useTiersQuery } from "@/hooks/use-curriculum";
 import { useRequireNickname } from "@/hooks/use-profile";
 import { UserAvatar } from "@/components/user-avatar";
+import { InstallAppBanner } from "@/components/install-app";
 
 const TIER_ICON: Record<string, string> = {
   sd: "➕",
@@ -78,6 +79,8 @@ export default function TierPickerPage() {
             Halo, {me?.nickname ? `@${me.nickname}` : session.displayName}. Mau latihan yang mana hari ini?
           </p>
         </div>
+
+        <InstallAppBanner />
 
         <Link
           href="/adventure"
