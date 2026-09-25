@@ -55,7 +55,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	tierID, err := getOrCreateTier(ctx, pool, "umum", "Umum", false, 3)
+	tierID, err := getOrCreateTier(ctx, pool, "umum", "Umum", false, 4)
 	if err != nil {
 		log.Fatalf("tier umum: %v", err)
 	}
