@@ -76,6 +76,15 @@ export type MeInfo = {
   currentStreak: number;
   longestStreak: number;
   livesRemaining: number;
+  // null = belum bikin nickname -> diarahin ke /onboarding (useRequireNickname).
+  nickname: string | null;
+  avatar: UserAvatar;
+};
+
+export type UserAvatar = {
+  type: "character" | "google";
+  key: string;
+  googleUrl: string | null;
 };
 
 export function useTiersQuery() {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { useRequireNickname } from "@/hooks/use-profile";
 import { usePuzzlePrefsStore } from "@/store/puzzle-prefs-store";
 import {
   useMeQuery,
@@ -29,6 +30,7 @@ export default function ChallengePage() {
   const params = useParams<{ tierCode: string; challengeId: string }>();
   const session = useAuthStore((s) => s.session);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  useRequireNickname();
 
   const startMutation = useStartChallengeMutation();
   const submitMutation = useSubmitAttemptMutation();

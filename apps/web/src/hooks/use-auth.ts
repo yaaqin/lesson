@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { publicApi, privateApi } from "@/lib/http";
 import { useAuthStore, type Session } from "@/store/auth-store";
 
@@ -42,6 +42,7 @@ export function useLoginMutation() {
 
 export function useLogoutMutation() {
   const setSession = useAuthStore((s) => s.setSession);
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async () => {
@@ -49,6 +50,7 @@ export function useLogoutMutation() {
         // best-effort — sesi lokal tetap dihapus walau request ini gagal/backend mati
       });
       setSession(null);
+      queryClient.clear();
     },
   });
 }

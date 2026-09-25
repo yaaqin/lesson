@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth-store";
+import { useRequireNickname } from "@/hooks/use-profile";
 import {
   useAdventureQuery,
   useAnswerAdventureMutation,
@@ -56,6 +57,7 @@ export default function AdventurePage() {
   const queryClient = useQueryClient();
   const session = useAuthStore((s) => s.session);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  useRequireNickname();
 
   const adventureQuery = useAdventureQuery();
   const startMutation = useStartAdventureMutation();

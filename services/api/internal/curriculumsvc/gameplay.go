@@ -439,9 +439,11 @@ func (s *Service) applyDailyStreak(ctx context.Context, userID string) (int, err
 func (s *Service) GetMe(ctx context.Context, userID string) (*MeInfo, error) {
 	var info MeInfo
 	err := s.db.QueryRow(ctx, `
-		SELECT id, email, display_name, role, current_streak, longest_streak
+		SELECT id, email, display_name, role, current_streak, longest_streak,
+			username, avatar_type, avatar_key, google_avatar_url
 		FROM users WHERE id = $1
-	`, userID).Scan(&info.ID, &info.Email, &info.DisplayName, &info.Role, &info.CurrentStreak, &info.LongestStreak)
+	`, userID).Scan(&info.ID, &info.Email, &info.DisplayName, &info.Role, &info.CurrentStreak, &info.LongestStreak,
+		&info.Nickname, &info.Avatar.Type, &info.Avatar.Key, &info.Avatar.GoogleURL)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound

@@ -37,7 +37,7 @@ export default function GoogleCallbackPage() {
           accessToken,
           refreshToken,
         });
-        router.replace("/belajar");
+        router.replace(data.nickname ? "/belajar" : "/onboarding");
       })
       .catch(() => {
         setSession(null);

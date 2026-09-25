@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { useRequireNickname } from "@/hooks/use-profile";
 import { useCategoriesQuery, useChallengesByCategoryQuery, useMeQuery } from "@/hooks/use-curriculum";
 
 export default function CategoryChallengesPage() {
@@ -11,6 +12,7 @@ export default function CategoryChallengesPage() {
   const params = useParams<{ tierCode: string; categoryId: string }>();
   const session = useAuthStore((s) => s.session);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  useRequireNickname();
 
   useEffect(() => {
     if (!hasHydrated) return;

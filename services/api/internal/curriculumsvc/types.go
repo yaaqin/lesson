@@ -135,6 +135,18 @@ type MeInfo struct {
 	CurrentStreak  int    `json:"currentStreak"`
 	LongestStreak  int    `json:"longestStreak"`
 	LivesRemaining int    `json:"livesRemaining"`
+	// Nickname nil = belum onboarding (apps/web maksa bikin dulu).
+	Nickname *string    `json:"nickname"`
+	Avatar   UserAvatar `json:"avatar"`
+}
+
+// UserAvatar: Type "character" -> Key = id karakter kartun; "google" -> URL
+// foto Google. GoogleURL selalu dikirim kalau ada, biar pilihan "pakai foto
+// Google" bisa ditampilin di picker walau avatar aktifnya karakter.
+type UserAvatar struct {
+	Type      string  `json:"type"`
+	Key       string  `json:"key"`
+	GoogleURL *string `json:"googleUrl"`
 }
 
 // --- Admin (dashboard) ---

@@ -39,6 +39,7 @@ type googleUserInfo struct {
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 	Name          string `json:"name"`
+	Picture       string `json:"picture"`
 }
 
 func (s *Service) exchangeGoogleCode(ctx context.Context, code string) (*googleUserInfo, error) {
@@ -144,6 +145,21 @@ func (s *Service) LoginWithGoogleCode(ctx context.Context, code string) (*TokenP
 		}
 	case err != nil:
 		return nil, err
+	}
+
+	// Foto Google disimpen/di-refresh tiap login (URL-nya bisa berubah). User
+	// yang belum pernah milih avatar (masih default) langsung pakai foto ini.
+	if info.Picture != "" {
+		if _, err := s.db.Exec(ctx, `
+			UPDATE users
+			SET google_avatar_url = $1,
+				avatar_type = CASE WHEN google_avatar_url IS NULL AND avatar_type = 'character' AND avatar_key = 'fox'
+					THEN 'google' ELSE avatar_type END,
+				updated_at = now()
+			WHERE id = $2
+		`, info.Picture, userID); err != nil {
+			return nil, err
+		}
 	}
 
 	var email, displayName, role string

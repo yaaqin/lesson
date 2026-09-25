@@ -39,6 +39,8 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 
 	// Me
 	mux.HandleFunc("GET /app/me", s.handleMe)
+	mux.HandleFunc("PATCH /app/me/profile", s.handleUpdateProfile)
+	mux.HandleFunc("GET /app/me/nickname-check", s.handleCheckNickname)
 	mux.HandleFunc("GET /app/me/progress", s.notImplemented)
 	mux.HandleFunc("GET /app/me/lives", s.notImplemented)
 	mux.HandleFunc("GET /app/me/organizations", s.notImplemented)

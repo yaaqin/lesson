@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { useRequireNickname } from "@/hooks/use-profile";
 import {
   useBatchesQuery,
   useCategoriesQuery,
@@ -17,6 +18,7 @@ export default function TierBatchPage() {
   const params = useParams<{ tierCode: string }>();
   const session = useAuthStore((s) => s.session);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  useRequireNickname();
 
   useEffect(() => {
     if (!hasHydrated) return;
