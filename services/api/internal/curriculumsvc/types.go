@@ -147,6 +147,8 @@ type MeInfo struct {
 	Avatar   UserAvatar `json:"avatar"`
 	// ThemePreference: light | dark | system (lihat UpdatePreferences).
 	ThemePreference string `json:"themePreference"`
+	// IsPremium: boleh bikin room multiplayer (diset admin, migrations/0012).
+	IsPremium bool `json:"isPremium"`
 }
 
 // UserAvatar: Type "character" -> Key = id karakter kartun; "google" -> URL
@@ -245,6 +247,7 @@ type AdminUserListItem struct {
 	CurrentStreak  int       `json:"currentStreak"`
 	LongestStreak  int       `json:"longestStreak"`
 	LivesRemaining int       `json:"livesRemaining"`
+	IsPremium      bool      `json:"isPremium"`
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
@@ -267,5 +270,6 @@ type AdminUserDetail struct {
 	LivesLastResetAt time.Time  `json:"livesLastResetAt"`
 	TotalAttempts    int        `json:"totalAttempts"`
 	PassedAttempts   int        `json:"passedAttempts"`
+	IsPremium        bool       `json:"isPremium"`
 	CreatedAt        time.Time  `json:"createdAt"`
 }

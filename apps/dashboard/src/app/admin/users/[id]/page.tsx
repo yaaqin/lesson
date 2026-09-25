@@ -4,7 +4,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useLogoutMutation } from "@/hooks/use-auth";
-import { useAdminUserDetailQuery, useResetUserLivesMutation } from "@/hooks/use-admin-users";
+import {
+  useAdminUserDetailQuery,
+  useResetUserLivesMutation,
+  useSetUserPremiumMutation,
+} from "@/hooks/use-admin-users";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
 import { BackButton } from "@/components/back-button";
@@ -18,6 +22,7 @@ export default function AdminUserDetailPage() {
 
   const userDetailQuery = useAdminUserDetailQuery(params.id);
   const resetLivesMutation = useResetUserLivesMutation(params.id);
+  const premiumMutation = useSetUserPremiumMutation(params.id);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [justReset, setJustReset] = useState(false);
@@ -150,6 +155,34 @@ export default function AdminUserDetailPage() {
                   {justReset ? "Berhasil ✓" : "Reset Nyawa"}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-900">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-500">
+                  Premium {user.isPremium && "👑"}
+                </span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-500">
+                  {user.isPremium
+                    ? "Aktif — user ini bisa bikin room multiplayer."
+                    : "Belum premium — cuma bisa gabung ke room orang lain."}
+                </span>
+                {premiumMutation.isError && (
+                  <span className="text-xs text-red-500">Gagal ngubah status premium, coba lagi.</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => premiumMutation.mutate(!user.isPremium)}
+                disabled={premiumMutation.isPending}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium disabled:opacity-40 ${
+                  user.isPremium
+                    ? "border border-black/[.08] text-zinc-600 dark:border-white/[.145] dark:text-zinc-400"
+                    : "bg-amber-500 text-white"
+                }`}
+              >
+                {premiumMutation.isPending ? "Menyimpan…" : user.isPremium ? "Cabut premium" : "Jadikan premium"}
+              </button>
             </div>
 
             <div className="flex flex-col gap-2 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-900">

@@ -9,6 +9,7 @@ import { InstallAppButton } from "@/components/install-app";
 import { BackButton } from "@/components/back-button";
 import { ShareButton } from "@/components/share-button";
 import { ThemePicker } from "@/components/theme-picker";
+import { PremiumBadge } from "@/components/premium-badge";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -39,6 +40,13 @@ export default function ProfilePage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 pb-10">
+        {me.isPremium && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+            <span className="text-sm text-amber-800 dark:text-amber-300">Kamu bisa bikin room multiplayer.</span>
+            <PremiumBadge />
+          </div>
+        )}
+
         <div className="rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.145] dark:bg-zinc-900">
           <ProfileForm me={me} submitLabel="Simpan perubahan" />
         </div>

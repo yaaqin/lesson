@@ -96,6 +96,20 @@ export default function TierPickerPage() {
           <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Main →</span>
         </Link>
 
+        <Link
+          href="/multiplayer"
+          className="flex items-center gap-4 rounded-2xl border-2 border-violet-500 bg-white px-5 py-5 transition-colors hover:bg-violet-50 dark:border-violet-400 dark:bg-zinc-900 dark:hover:bg-violet-500/10"
+        >
+          <span className="text-3xl">⚔️</span>
+          <span className="flex flex-1 flex-col gap-0.5">
+            <span className="font-semibold text-black dark:text-zinc-50">Multiplayer</span>
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              Main bareng sampai 10 orang, pakai kode room.
+            </span>
+          </span>
+          <span className="text-sm font-medium text-violet-600 dark:text-violet-400">Gabung →</span>
+        </Link>
+
         {tiersQuery.isLoading && (
           <p className="text-sm text-zinc-500 dark:text-zinc-500">Memuat jenjang…</p>
         )}

@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useMeQuery } from "@/hooks/use-curriculum";
 import { ProfileForm } from "@/components/profile-form";
+import { takePostLoginPath } from "@/lib/post-login";
 
 // Pertama kali masuk (mis. baru login Google): wajib bikin nickname dulu
 // sebelum bisa main -- lihat useRequireNickname di halaman-halaman lain.
@@ -21,7 +22,7 @@ export default function OnboardingPage() {
   }, [hasHydrated, session, router]);
 
   useEffect(() => {
-    if (me?.nickname) router.replace("/belajar");
+    if (me?.nickname) router.replace(takePostLoginPath("/belajar"));
   }, [me, router]);
 
   if (!hasHydrated || !session || !me || me.nickname) {
@@ -42,7 +43,7 @@ export default function OnboardingPage() {
             diganti di halaman profil.
           </p>
         </div>
-        <ProfileForm me={me} submitLabel="Simpan & mulai belajar" onSaved={() => router.replace("/belajar")} />
+        <ProfileForm me={me} submitLabel="Simpan & mulai belajar" onSaved={() => router.replace(takePostLoginPath("/belajar"))} />
       </div>
     </div>
   );

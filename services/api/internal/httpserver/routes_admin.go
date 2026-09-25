@@ -59,6 +59,7 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /admin/users", s.handleAdminListUsers)
 	mux.HandleFunc("GET /admin/users/{id}", s.handleAdminGetUser)
 	mux.HandleFunc("POST /admin/users/{id}/lives/reset", s.handleAdminResetUserLives)
+	mux.HandleFunc("PUT /admin/users/{id}/premium", s.handleAdminSetUserPremium)
 }
 
 func (s *Server) handleAdminListCurriculum(w http.ResponseWriter, r *http.Request) {
@@ -349,6 +350,35 @@ func (s *Server) handleAdminResetUserLives(w http.ResponseWriter, r *http.Reques
 
 	userID := r.PathValue("id")
 	if err := s.curriculum.AdminResetUserLives(r.Context(), userID); err != nil {
+		switch {
+		case errors.Is(err, curriculumsvc.ErrNotFound):
+			writeError(w, http.StatusNotFound, "not_found")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error")
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type setPremiumRequest struct {
+	IsPremium bool `json:"isPremium"`
+}
+
+// handleAdminSetUserPremium: premium = boleh bikin room multiplayer.
+func (s *Server) handleAdminSetUserPremium(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req setPremiumRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	if err := s.curriculum.AdminSetUserPremium(r.Context(), r.PathValue("id"), req.IsPremium); err != nil {
 		switch {
 		case errors.Is(err, curriculumsvc.ErrNotFound):
 			writeError(w, http.StatusNotFound, "not_found")

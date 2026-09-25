@@ -30,7 +30,7 @@ func (s *Service) AdminListUsers(ctx context.Context, page, pageSize int, search
 
 	rows, err := s.db.Query(ctx, `
 		SELECT u.id, u.email, u.display_name, u.current_streak, u.longest_streak,
-			COALESCE(l.lives_remaining, 3), u.created_at
+			COALESCE(l.lives_remaining, 3), u.is_premium, u.created_at
 		FROM users u
 		LEFT JOIN lives l ON l.user_id = u.id
 		WHERE u.role = 'student' AND ($1 = '' OR u.display_name ILIKE $2 OR u.email ILIKE $2)
@@ -47,7 +47,7 @@ func (s *Service) AdminListUsers(ctx context.Context, page, pageSize int, search
 		var item AdminUserListItem
 		if err := rows.Scan(
 			&item.ID, &item.Email, &item.DisplayName, &item.CurrentStreak, &item.LongestStreak,
-			&item.LivesRemaining, &item.CreatedAt,
+			&item.LivesRemaining, &item.IsPremium, &item.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -68,13 +68,13 @@ func (s *Service) AdminGetUserDetail(ctx context.Context, userID string) (*Admin
 	err := s.db.QueryRow(ctx, `
 		SELECT u.id, u.email, u.display_name, u.role, u.current_streak, u.longest_streak,
 			u.last_active_date, COALESCE(l.lives_remaining, 3),
-			COALESCE(l.last_daily_reset_at, u.created_at), u.created_at
+			COALESCE(l.last_daily_reset_at, u.created_at), u.is_premium, u.created_at
 		FROM users u
 		LEFT JOIN lives l ON l.user_id = u.id
 		WHERE u.id = $1
 	`, userID).Scan(
 		&d.ID, &d.Email, &d.DisplayName, &d.Role, &d.CurrentStreak, &d.LongestStreak,
-		&d.LastActiveDate, &d.LivesRemaining, &d.LivesLastResetAt, &d.CreatedAt,
+		&d.LastActiveDate, &d.LivesRemaining, &d.LivesLastResetAt, &d.IsPremium, &d.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -111,4 +111,19 @@ func (s *Service) AdminResetUserLives(ctx context.Context, userID string) error 
 		ON CONFLICT (user_id) DO UPDATE SET lives_remaining = 3, last_daily_reset_at = now()
 	`, userID)
 	return err
+}
+
+// AdminSetUserPremium: nyalain/matiin status premium (boleh bikin room
+// multiplayer). Room yang udah kebuka gak ikut ditutup kalau dicabut.
+func (s *Service) AdminSetUserPremium(ctx context.Context, userID string, isPremium bool) error {
+	tag, err := s.db.Exec(ctx, `
+		UPDATE users SET is_premium = $1, updated_at = now() WHERE id = $2
+	`, isPremium, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

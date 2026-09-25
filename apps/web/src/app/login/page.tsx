@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLoginMutation } from "@/hooks/use-auth";
+import { takePostLoginPath } from "@/lib/post-login";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:9801/api/v1";
 
@@ -36,7 +37,7 @@ function LoginForm() {
     setError(null);
     try {
       await loginMutation.mutateAsync({ identifier: email, password });
-      router.push("/belajar");
+      router.push(takePostLoginPath("/belajar"));
     } catch {
       setError("Email atau password salah.");
     }

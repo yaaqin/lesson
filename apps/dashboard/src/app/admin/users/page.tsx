@@ -25,7 +25,14 @@ const columns = [
     header: "Nama & Email",
     cell: ({ row }) => (
       <div className="flex flex-col">
-        <span className="font-medium text-black dark:text-zinc-50">{row.original.displayName}</span>
+        <span className="flex items-center gap-1.5 font-medium text-black dark:text-zinc-50">
+          {row.original.displayName}
+          {row.original.isPremium && (
+            <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+              👑 Premium
+            </span>
+          )}
+        </span>
         <span className="text-xs text-zinc-500 dark:text-zinc-500">{row.original.email}</span>
       </div>
     ),

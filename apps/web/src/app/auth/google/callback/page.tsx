@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { privateApi } from "@/lib/http";
+import { takePostLoginPath } from "@/lib/post-login";
 
 // Backend (routes_auth.go handleGoogleCallback) redirect ke sini bawa
 // accessToken/refreshToken di URL FRAGMENT (bukan query string) -- fragment
@@ -37,7 +38,7 @@ export default function GoogleCallbackPage() {
           accessToken,
           refreshToken,
         });
-        router.replace(data.nickname ? "/belajar" : "/onboarding");
+        router.replace(data.nickname ? takePostLoginPath("/belajar") : "/onboarding");
       })
       .catch(() => {
         setSession(null);

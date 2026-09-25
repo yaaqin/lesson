@@ -8,6 +8,7 @@ export type AdminUserListItem = {
   currentStreak: number;
   longestStreak: number;
   livesRemaining: number;
+  isPremium: boolean;
   createdAt: string;
 };
 
@@ -30,6 +31,8 @@ export type AdminUserDetail = {
   livesLastResetAt: string;
   totalAttempts: number;
   passedAttempts: number;
+  // Premium: boleh bikin room multiplayer di apps/web.
+  isPremium: boolean;
   createdAt: string;
 };
 
@@ -62,6 +65,17 @@ export function useResetUserLivesMutation(userId: string) {
     onSuccess: () => {
       // prefix ["admin","users"] nyakup query list & detail sekaligus (queryKey detail
       // dimulai ["admin","users","detail",userId]).
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+export function useSetUserPremiumMutation(userId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (isPremium: boolean) => privateApi.put(`/admin/users/${userId}/premium`, { isPremium }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
   });
