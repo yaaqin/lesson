@@ -145,6 +145,8 @@ type MeInfo struct {
 	// Nickname nil = belum onboarding (apps/web maksa bikin dulu).
 	Nickname *string    `json:"nickname"`
 	Avatar   UserAvatar `json:"avatar"`
+	// ThemePreference: light | dark | system (lihat UpdatePreferences).
+	ThemePreference string `json:"themePreference"`
 }
 
 // UserAvatar: Type "character" -> Key = id karakter kartun; "google" -> URL

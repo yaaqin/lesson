@@ -85,6 +85,7 @@ export type MeInfo = {
   // null = belum bikin nickname -> diarahin ke /onboarding (useRequireNickname).
   nickname: string | null;
   avatar: UserAvatar;
+  themePreference: "light" | "dark" | "system";
 };
 
 export type UserAvatar = {

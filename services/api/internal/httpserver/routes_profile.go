@@ -65,3 +65,32 @@ func (s *Server) handleCheckNickname(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, result)
 }
+
+type updatePreferencesRequest struct {
+	ThemePreference string `json:"themePreference"`
+}
+
+func (s *Server) handleUpdatePreferences(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req updatePreferencesRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	me, err := s.curriculum.UpdatePreferences(r.Context(), claims.Subject, req.ThemePreference)
+	if err != nil {
+		if errors.Is(err, curriculumsvc.ErrInvalidThemePreference) {
+			writeError(w, http.StatusBadRequest, "invalid_theme_preference")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, me)
+}

@@ -47,7 +47,7 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /app/me/lives", s.notImplemented)
 	mux.HandleFunc("GET /app/me/organizations", s.notImplemented)
 	mux.HandleFunc("POST /app/me/lives/reset", s.notImplemented)
-	mux.HandleFunc("PATCH /app/me/preferences", s.notImplemented)
+	mux.HandleFunc("PATCH /app/me/preferences", s.handleUpdatePreferences)
 }
 
 func (s *Server) handleListTiers(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { privateApi } from "@/lib/http";
 import { useMeQuery, type MeInfo } from "@/hooks/use-curriculum";
 import { useAuthStore } from "@/store/auth-store";
+import { applyTheme, storeTheme, type ThemePreference } from "@/lib/theme";
 
 export type NicknameCheck = { nickname: string; valid: boolean; available: boolean };
 
@@ -32,6 +33,25 @@ export function useUpdateProfileMutation() {
     onSuccess: (me) => {
       queryClient.setQueryData(["me"], me);
       queryClient.invalidateQueries({ queryKey: ["nickname-check"] });
+    },
+  });
+}
+
+// Ganti tema: langsung kepake di device ini (optimistic), terus disimpen ke
+// akun biar kebawa ke device lain.
+export function useUpdateThemeMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (themePreference: ThemePreference) =>
+      (await privateApi.patch<MeInfo>("/app/me/preferences", { themePreference })).data,
+    onMutate: (themePreference) => {
+      storeTheme(themePreference);
+      applyTheme(themePreference);
+      queryClient.setQueryData<MeInfo>(["me"], (me) => (me ? { ...me, themePreference } : me));
+    },
+    onSuccess: (me) => {
+      queryClient.setQueryData(["me"], me);
     },
   });
 }

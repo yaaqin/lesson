@@ -8,6 +8,7 @@ import { ProfileForm } from "@/components/profile-form";
 import { InstallAppButton } from "@/components/install-app";
 import { BackButton } from "@/components/back-button";
 import { ShareButton } from "@/components/share-button";
+import { ThemePicker } from "@/components/theme-picker";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -56,6 +57,8 @@ export default function ProfilePage() {
             className="flex items-center justify-center gap-2 rounded-full border border-orange-300 bg-orange-50 px-6 py-3 text-sm font-semibold text-orange-600 transition-colors hover:bg-orange-100 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400"
           />
         )}
+
+        <ThemePicker value={me.themePreference} />
 
         <InstallAppButton />
       </main>

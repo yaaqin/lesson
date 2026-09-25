@@ -133,3 +133,21 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, in ProfileUp
 
 	return s.GetMe(ctx, userID)
 }
+
+// ThemePreferences: nilai enum theme_preference_type (migrations/0001).
+var ThemePreferences = []string{"light", "dark", "system"}
+
+var ErrInvalidThemePreference = errors.New("pilihan tema gak valid")
+
+// UpdatePreferences: sekarang cuma tema tampilan apps/web.
+func (s *Service) UpdatePreferences(ctx context.Context, userID, themePreference string) (*MeInfo, error) {
+	if !slices.Contains(ThemePreferences, themePreference) {
+		return nil, ErrInvalidThemePreference
+	}
+	if _, err := s.db.Exec(ctx, `
+		UPDATE users SET theme_preference = $1::theme_preference_type, updated_at = now() WHERE id = $2
+	`, themePreference, userID); err != nil {
+		return nil, err
+	}
+	return s.GetMe(ctx, userID)
+}
