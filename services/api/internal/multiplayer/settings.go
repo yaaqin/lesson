@@ -5,12 +5,18 @@
 //
 // Dua mode:
 //   - classic: semua pemain dapet soal yang sama barengan. Jawab kapan aja
-//     selama waktu soal jalan, lalu nunggu waktunya habis. Benar = 500..1000
-//     poin tergantung kecepatan (dihitung dari jam server, bukan klaim klien).
+//     selama waktu soal jalan; soal ditutup pas waktunya habis ATAU semua
+//     pemain yang online udah jawab. Benar = 500..1000 poin tergantung
+//     kecepatan (dihitung dari jam server, bukan klaim klien).
 //   - race: adu cepet. Jawaban benar PERTAMA dapet 1 poin dan soal langsung
-//     ditutup. Salah = kekunci buat soal itu. Jumlah soal ganjil.
+//     ditutup. Salah = kekunci buat soal itu. Jumlah soal ganjil. Kalau
+//     ShowFastest, pemenang soal dipamerin sebentar (reveal) sebelum
+//     cooldown; kalau gak, nama pemenang dirahasiain dan hasil akhir baru
+//     keluar setelah host klik "tampilkan hasil" (+ countdown).
 //
-// Hasil (ranking) cuma ditampilin di akhir game, gak disimpen ke DB.
+// Antar soal selalu ada cooldown (lamanya diatur admin, lihat
+// curriculumsvc.MultiplayerConfig). Ranking cuma ditampilin di akhir game;
+// yang disimpen ke DB cuma rank tiap pemain buat kartu share.
 package multiplayer
 
 import (
@@ -33,9 +39,7 @@ const (
 	classicMaxPoints = 1000
 	classicMinPoints = 500
 
-	countdownDuration     = 3 * time.Second
-	classicRevealDuration = 4 * time.Second
-	raceRevealDuration    = 3 * time.Second
+	countdownDuration = 3 * time.Second
 
 	// Pemain yang putus di lobby dikeluarin kalau gak balik dalam waktu ini
 	// (iOS mutus WebSocket tiap app ditinggal sebentar, jadi jangan langsung).
@@ -44,6 +48,9 @@ const (
 	lobbyHostAbsentLimit = 3 * time.Minute
 	lobbyMaxAge          = 60 * time.Minute
 	finishedRoomTTL      = 10 * time.Minute
+	// Hasil yang dirahasiain (race tanpa ShowFastest) otomatis dibuka kalau
+	// host gak ada selama lobbyHostAbsentLimit atau gak klik-klik selama ini.
+	awaitingResultsLimit = 10 * time.Minute
 	ticketTTL            = 30 * time.Second
 )
 
@@ -71,6 +78,27 @@ type Settings struct {
 	SecondsPerQuestion int      `json:"secondsPerQuestion"`
 	BatchIDs           []string `json:"batchIds"`
 	HostPlays          bool     `json:"hostPlays"`
+	// ShowFastest: cuma kepake di race (classic selalu true).
+	ShowFastest bool `json:"showFastest"`
+}
+
+// Timing: durasi jeda antar soal, snapshot dari config admin pas room dibikin.
+type Timing struct {
+	Cooldown         time.Duration
+	WinnerReveal     time.Duration
+	ResultsCountdown time.Duration
+}
+
+func timingFromConfig(c *curriculumsvc.MultiplayerConfig, mode string) Timing {
+	cooldown := c.ClassicCooldownSeconds
+	if mode == ModeRace {
+		cooldown = c.RaceCooldownSeconds
+	}
+	return Timing{
+		Cooldown:         time.Duration(cooldown) * time.Second,
+		WinnerReveal:     time.Duration(c.RaceWinnerRevealSeconds) * time.Second,
+		ResultsCountdown: time.Duration(c.ResultsCountdownSeconds) * time.Second,
+	}
 }
 
 // QuestionCountOptions: classic 10, 20, ..., 100; race ganjil 5, 15, ..., 95.
@@ -91,6 +119,9 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 func (s *Settings) validate() error {
 	if s.Mode != ModeClassic && s.Mode != ModeRace {
 		return ErrInvalidSettings
+	}
+	if s.Mode == ModeClassic {
+		s.ShowFastest = true
 	}
 	if !slices.Contains(QuestionCountOptions(s.Mode), s.QuestionCount) {
 		return ErrInvalidSettings

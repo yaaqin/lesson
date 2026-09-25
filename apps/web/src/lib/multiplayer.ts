@@ -4,7 +4,7 @@ export const MODE_INFO: Record<MultiplayerMode, { label: string; icon: string; d
   classic: {
     label: "Klasik",
     icon: "🎯",
-    desc: "Semua jawab soal yang sama barengan. Benar + makin cepat = poin makin gede. Soal lanjut pas waktunya habis.",
+    desc: "Semua jawab soal yang sama barengan. Benar + makin cepat = poin makin gede. Soal lanjut pas waktunya habis atau semua udah jawab.",
   },
   race: {
     label: "Adu Cepat",

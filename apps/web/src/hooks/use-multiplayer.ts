@@ -42,6 +42,9 @@ export type CreateRoomInput = {
   secondsPerQuestion: number;
   batchIds: string[];
   hostPlays: boolean;
+  // Adu cepat: pamerin siapa yang paling cepet tiap soal. false = pemenang
+  // dirahasiain & hasil akhir nunggu host klik "Tampilkan hasil".
+  showFastest: boolean;
 };
 
 export type PlayerProfile = {
@@ -51,7 +54,19 @@ export type PlayerProfile = {
   isPremium: boolean;
 };
 
-export type RoomPhase = "lobby" | "countdown" | "question" | "reveal" | "finished" | "closed";
+// reveal = pamer pemenang soal (adu cepat, showFastest); cooldown = jeda
+// antar soal; awaiting_results & results_countdown = hasil adu cepat yang
+// dirahasiain sampai host buka.
+export type RoomPhase =
+  | "lobby"
+  | "countdown"
+  | "question"
+  | "reveal"
+  | "cooldown"
+  | "awaiting_results"
+  | "results_countdown"
+  | "finished"
+  | "closed";
 
 export type RoomState = {
   type: "state";
@@ -62,6 +77,7 @@ export type RoomState = {
     questionCount: number;
     format: MultiplayerFormat;
     secondsPerQuestion: number;
+    showFastest: boolean;
     sources: string[];
     hostId: string;
     maxPlayers: number;
@@ -86,6 +102,8 @@ export type RoomState = {
     correctValue: number;
     correctCount: number;
     answeredCount: number;
+    hasWinner: boolean;
+    // Cuma dikirim kalau room-nya showFastest.
     winner?: PlayerProfile;
   };
   results?: {
@@ -96,6 +114,8 @@ export type RoomState = {
     avgCorrectMs: number;
     left: boolean;
   }[];
+  // Keisi setelah hasil kesimpen di server (buat link share).
+  matchId?: string;
 };
 
 export function useMultiplayerOptionsQuery() {
@@ -136,6 +156,7 @@ export type ClientMessage =
   | { type: "kick"; userId: string }
   | { type: "set_host_plays"; plays: boolean }
   | { type: "close" }
+  | { type: "reveal_results" }
   | { type: "leave" };
 
 // useRoomSocket: minta ticket (HTTP, lewat auth + auto refresh token), buka
@@ -221,7 +242,7 @@ export function useRoomSocket(code: string) {
       } else if (msg.type === "kicked") {
         end("kicked");
       } else if (msg.type === "closed") {
-        end("closed");
+        end(msg.reason === "host_closed" ? "host_closed" : "closed");
       } else if (msg.type === "error") {
         setLastError({ code: String(msg.code), at: Date.now() });
       }
@@ -282,7 +303,13 @@ export function useRoomSocket(code: string) {
     end("left");
   }, [send, end]);
 
-  return { state, status, lastError, clockOffset, send, leave };
+  // closeRoom: host nutup room (kill) -- semua pemain ikut dikeluarin.
+  const closeRoom = useCallback(() => {
+    send({ type: "close" });
+    end("left");
+  }, [send, end]);
+
+  return { state, status, lastError, clockOffset, send, leave, closeRoom };
 }
 
 // useCountdown: sisa detik sampai `endsAt` (epoch ms jam server).

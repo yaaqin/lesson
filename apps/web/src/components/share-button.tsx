@@ -17,6 +17,9 @@ import {
 import { publicApi } from "@/lib/http";
 import { buildShareContent, sharePath, type ShareKind, type ShareProfile } from "@/lib/share";
 
+const DEFAULT_BUTTON_CLASS =
+  "flex items-center gap-1.5 rounded-full border border-black/[.08] px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-[#1a1a1a]";
+
 // Tombol "Bagikan" + sheet pilihan share (sosmed, salin link, download
 // gambar). Link yang dibagiin ngarah ke halaman undangan /s/{nickname}/{kind}.
 export function ShareButton({
@@ -33,40 +36,75 @@ export function ShareButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          className ??
-          "flex items-center gap-1.5 rounded-full border border-black/[.08] px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-[#1a1a1a]"
-        }
-      >
+      <button type="button" onClick={() => setOpen(true)} className={className ?? DEFAULT_BUTTON_CLASS}>
         <HugeiconsIcon icon={Share08Icon} size={16} strokeWidth={1.8} />
         {label}
       </button>
-      {open && <ShareSheet nickname={nickname} kind={kind} onClose={() => setOpen(false)} />}
+      {open && <ProfileShareSheet nickname={nickname} kind={kind} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function ShareSheet({ nickname, kind, onClose }: { nickname: string; kind: ShareKind; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState(false);
+// PathShareButton: share halaman undangan apa aja yang punya route /image
+// (mis. hasil multiplayer /s/{nickname}/multiplayer/{matchId}).
+export function PathShareButton({
+  path,
+  text,
+  fileName,
+  label = "Bagikan",
+  className,
+}: {
+  path: string;
+  text: string;
+  fileName: string;
+  label?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={className ?? DEFAULT_BUTTON_CLASS}>
+        <HugeiconsIcon icon={Share08Icon} size={16} strokeWidth={1.8} />
+        {label}
+      </button>
+      {open && <ShareSheet path={path} text={text} fileName={fileName} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function ProfileShareSheet({ nickname, kind, onClose }: { nickname: string; kind: ShareKind; onClose: () => void }) {
   const profileQuery = useQuery({
     queryKey: ["share-profile", nickname],
     queryFn: async () =>
       (await publicApi.get<ShareProfile>(`/public/share/${encodeURIComponent(nickname)}`)).data,
     staleTime: 0,
   });
+  const text = profileQuery.data ? buildShareContent(profileQuery.data, kind).text : "Ayo latihan matematika bareng di MathQuest!";
+  return (
+    <ShareSheet path={sharePath(nickname, kind)} text={text} fileName={`mathquest-${nickname}-${kind}.png`} onClose={onClose} />
+  );
+}
 
-  const path = sharePath(nickname, kind);
+function ShareSheet({
+  path,
+  text,
+  fileName,
+  onClose,
+}: {
+  path: string;
+  text: string;
+  fileName: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
   const url = `${window.location.origin}${path}`;
   const imageUrl = `${path}/image`;
-  const text = profileQuery.data ? buildShareContent(profileQuery.data, kind).text : "Ayo latihan matematika bareng di MathQuest!";
 
   const fetchImageFile = async () => {
     const blob = await (await fetch(imageUrl)).blob();
-    return new File([blob], `mathquest-${nickname}-${kind}.png`, { type: "image/png" });
+    return new File([blob], fileName, { type: "image/png" });
   };
 
   // Share bawaan HP (bisa langsung ke IG/WA story dll) -- kirim gambarnya

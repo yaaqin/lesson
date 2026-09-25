@@ -37,6 +37,7 @@ export default function CreateRoomPage() {
   const [seconds, setSeconds] = useState(20);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [hostPlays, setHostPlays] = useState(true);
+  const [showFastest, setShowFastest] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function CreateRoomPage() {
   const submit = () => {
     setError(null);
     createMutation.mutate(
-      { mode, questionCount, format, secondsPerQuestion: seconds, batchIds, hostPlays },
+      { mode, questionCount, format, secondsPerQuestion: seconds, batchIds, hostPlays, showFastest },
       {
         onSuccess: ({ code }) => router.push(`/multiplayer/${code}`),
         onError: (err) => setError(CREATE_ERROR_TEXT[errorCode(err) ?? ""] ?? "Gagal bikin room, coba lagi."),
@@ -126,6 +127,24 @@ export default function CreateRoomPage() {
         <Section title="Jumlah soal" hint={mode === "race" ? "Adu cepat pakai jumlah ganjil biar jarang seri." : undefined}>
           <Chips values={countOptions} selected={questionCount} onPick={setQuestionCount} />
         </Section>
+
+        {mode === "race" && (
+          <Section
+            title="Tampilkan yang paling cepat"
+            hint={
+              showFastest
+                ? "Tiap soal, nama yang jawab benar paling duluan dipamerin sebentar."
+                : "Pemenang tiap soal dirahasiain. Hasil akhir baru keluar setelah kamu klik \"Tampilkan hasil\"."
+            }
+          >
+            <Chips
+              values={[true, false]}
+              selected={showFastest}
+              onPick={setShowFastest}
+              label={(v) => (v ? "⚡ Tampilkan" : "🤫 Rahasiain")}
+            />
+          </Section>
+        )}
 
         <Section title="Bentuk soal" hint={format === "mixed" ? "Separuh pilihan ganda, separuh isian." : undefined}>
           <Chips

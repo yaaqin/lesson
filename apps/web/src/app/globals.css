@@ -29,3 +29,26 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Angka hitung mundur multiplayer (countdown/cooldown): tiap angka ganti
+   "nongol" biar keliatan. Dipakai lewat class animate-pop + key per angka. */
+@theme {
+  --animate-pop: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  @keyframes pop {
+    0% {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pop {
+    animation: none;
+  }
+}

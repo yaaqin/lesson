@@ -179,6 +179,8 @@ func (r *Room) handle(userID string, msg inbound) string {
 		return r.setHostPlays(userID, *msg.Plays)
 	case "close":
 		return r.closeByHost(userID)
+	case "reveal_results":
+		return r.revealResults(userID)
 	case "leave":
 		r.leave(userID)
 		return ""

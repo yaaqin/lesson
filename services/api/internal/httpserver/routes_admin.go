@@ -60,6 +60,47 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /admin/users/{id}", s.handleAdminGetUser)
 	mux.HandleFunc("POST /admin/users/{id}/lives/reset", s.handleAdminResetUserLives)
 	mux.HandleFunc("PUT /admin/users/{id}/premium", s.handleAdminSetUserPremium)
+
+	// Jeda antar soal multiplayer (cooldown, pamer pemenang, countdown hasil).
+	mux.HandleFunc("GET /admin/multiplayer/config", s.handleAdminGetMultiplayerConfig)
+	mux.HandleFunc("PUT /admin/multiplayer/config", s.handleAdminUpdateMultiplayerConfig)
+}
+
+func (s *Server) handleAdminGetMultiplayerConfig(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	cfg, err := s.curriculum.GetMultiplayerConfig(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+// handleAdminUpdateMultiplayerConfig: berlaku buat room yang dibikin setelah ini.
+func (s *Server) handleAdminUpdateMultiplayerConfig(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req curriculumsvc.MultiplayerConfig
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	if err := s.curriculum.AdminUpdateMultiplayerConfig(r.Context(), req); err != nil {
+		if errors.Is(err, curriculumsvc.ErrInvalidMultiplayerConfig) {
+			writeError(w, http.StatusBadRequest, "invalid_config")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleAdminListCurriculum(w http.ResponseWriter, r *http.Request) {

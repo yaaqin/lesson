@@ -9,8 +9,10 @@ import { useCountdown, useRoomSocket, type ClientMessage, type RoomState } from 
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { UserAvatar } from "@/components/user-avatar";
 import { PremiumBadge } from "@/components/premium-badge";
+import { PathShareButton } from "@/components/share-button";
 import { FORMAT_LABEL, JOIN_ERROR_TEXT, MODE_INFO, TIER_BADGE, TIER_LABEL, normalizeRoomCode } from "@/lib/multiplayer";
 import { clearPostLoginPath, rememberPostLoginPath } from "@/lib/post-login";
+import { buildMatchShareContent, matchSharePath } from "@/lib/share";
 
 const ACTION_ERROR_TEXT: Record<string, string> = {
   not_enough_players: "Butuh minimal 2 pemain buat mulai.",
@@ -21,6 +23,7 @@ const ACTION_ERROR_TEXT: Record<string, string> = {
 const ENDED_TEXT: Record<string, string> = {
   ...JOIN_ERROR_TEXT,
   closed: "Room udah ditutup.",
+  host_closed: "Host udah nutup room ini.",
   replaced: "Kamu buka room ini di tab/device lain.",
 };
 
@@ -48,7 +51,7 @@ export default function RoomPage() {
 
 function Room({ code }: { code: string }) {
   const router = useRouter();
-  const { state, status, lastError, clockOffset, send, leave } = useRoomSocket(code);
+  const { state, status, lastError, clockOffset, send, leave, closeRoom } = useRoomSocket(code);
 
   useEffect(() => clearPostLoginPath(), []);
   // Error aksi (mis. mulai kurang pemain) tampil 3 detik lalu ilang sendiri.
@@ -77,6 +80,11 @@ function Room({ code }: { code: string }) {
     leave();
     router.push("/multiplayer");
   };
+  // Kill room: host nutup room, semua pemain ikut dikeluarin.
+  const kill = () => {
+    closeRoom();
+    router.push("/multiplayer");
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
@@ -85,7 +93,7 @@ function Room({ code }: { code: string }) {
         <span className="text-sm font-semibold text-black dark:text-zinc-50">
           {MODE_INFO[state.room.mode].icon} {MODE_INFO[state.room.mode].label}
         </span>
-        <ExitButton state={state} onExit={exit} />
+        <ExitButton state={state} onExit={exit} onKill={kill} />
       </header>
 
       {status.kind === "reconnecting" && (
@@ -101,9 +109,22 @@ function Room({ code }: { code: string }) {
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 pb-10 sm:px-6">
         {state.phase === "lobby" && <Lobby state={state} send={send} />}
-        {state.phase === "countdown" && <CountdownView state={state} clockOffset={clockOffset} />}
-        {(state.phase === "question" || state.phase === "reveal") && (
+        {state.phase === "countdown" && (
+          <div className="flex flex-1 flex-col items-center justify-center py-20">
+            <BigCountdown endsAt={state.phaseEndsAt} clockOffset={clockOffset} label="Siap-siap…" />
+          </div>
+        )}
+        {state.phase === "question" && (
           <QuestionView key={state.question?.index} state={state} clockOffset={clockOffset} send={send} />
+        )}
+        {state.phase === "reveal" && <WinnerFlash state={state} />}
+        {state.phase === "cooldown" && <CooldownView state={state} clockOffset={clockOffset} />}
+        {state.phase === "awaiting_results" && <AwaitingResults state={state} send={send} />}
+        {state.phase === "results_countdown" && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20">
+            <span className="text-5xl">🥁</span>
+            <BigCountdown endsAt={state.phaseEndsAt} clockOffset={clockOffset} label="Hasil diumumin dalam" />
+          </div>
         )}
         {state.phase === "finished" && <Results state={state} onExit={exit} />}
       </main>
@@ -111,10 +132,11 @@ function Room({ code }: { code: string }) {
   );
 }
 
-function ExitButton({ state, onExit }: { state: RoomState; onExit: () => void }) {
+function ExitButton({ state, onExit, onKill }: { state: RoomState; onExit: () => void; onKill: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const inGame = state.phase !== "lobby" && state.phase !== "finished";
-  const hostInLobby = state.you.isHost && state.phase === "lobby";
+  const isHost = state.you.isHost;
+  const hostInLobby = isHost && state.phase === "lobby";
 
   if (!confirming) {
     return (
@@ -127,27 +149,65 @@ function ExitButton({ state, onExit }: { state: RoomState; onExit: () => void })
       </button>
     );
   }
+
+  const cancel = (
+    <button
+      type="button"
+      onClick={() => setConfirming(false)}
+      className="rounded-full border border-black/[.08] py-2.5 text-sm font-medium dark:border-white/[.145] dark:text-zinc-300"
+    >
+      Batal
+    </button>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
       <div className="flex w-full max-w-sm flex-col gap-4 rounded-2xl bg-white p-6 dark:bg-zinc-900">
-        <p className="font-semibold text-black dark:text-zinc-50">{hostInLobby ? "Tutup room?" : "Keluar dari game?"}</p>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          {hostInLobby
-            ? "Semua pemain di lobby bakal dikeluarin."
-            : "Kamu gak bisa jawab soal lagi, skor yang udah didapet tetap kehitung."}
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setConfirming(false)}
-            className="rounded-full border border-black/[.08] py-2.5 text-sm font-medium dark:border-white/[.145] dark:text-zinc-300"
-          >
-            Batal
-          </button>
-          <button type="button" onClick={onExit} className="rounded-full bg-red-600 py-2.5 text-sm font-semibold text-white">
-            {hostInLobby ? "Tutup" : "Keluar"}
-          </button>
-        </div>
+        {hostInLobby ? (
+          <>
+            <p className="font-semibold text-black dark:text-zinc-50">Tutup room?</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Semua pemain di lobby bakal dikeluarin.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {cancel}
+              <button type="button" onClick={onKill} className="rounded-full bg-red-600 py-2.5 text-sm font-semibold text-white">
+                Tutup
+              </button>
+            </div>
+          </>
+        ) : isHost ? (
+          <>
+            <p className="font-semibold text-black dark:text-zinc-50">Keluar dari game?</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Kamu yang bikin room ini. Mau bubarin room buat semua pemain, atau keluar sendiri aja?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={onKill} className="rounded-full bg-red-600 py-2.5 text-sm font-semibold text-white">
+                Tutup room (semua keluar)
+              </button>
+              <button
+                type="button"
+                onClick={onExit}
+                className="rounded-full border border-red-300 py-2.5 text-sm font-medium text-red-600 dark:border-red-500/40 dark:text-red-400"
+              >
+                Keluar aja, game tetap lanjut
+              </button>
+              {cancel}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="font-semibold text-black dark:text-zinc-50">Keluar dari game?</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Kamu gak bisa jawab soal lagi, skor yang udah didapet tetap kehitung.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {cancel}
+              <button type="button" onClick={onExit} className="rounded-full bg-red-600 py-2.5 text-sm font-semibold text-white">
+                Keluar
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -280,12 +340,16 @@ function Info({ label, value }: { label: string; value: string }) {
 
 // ---------- Main ----------
 
-function CountdownView({ state, clockOffset }: { state: RoomState; clockOffset: number }) {
-  const left = useCountdown(state.phaseEndsAt, clockOffset);
+// BigCountdown: angka hitung mundur gede (countdown awal, cooldown antar
+// soal, countdown hasil) -- tiap angka ganti "nongol" biar kerasa.
+function BigCountdown({ endsAt, clockOffset, label }: { endsAt: number; clockOffset: number; label: string }) {
+  const left = Math.max(useCountdown(endsAt, clockOffset), 1);
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20">
-      <span className="text-sm text-zinc-500">Siap-siap…</span>
-      <span className="text-8xl font-bold text-violet-600 dark:text-violet-400">{Math.max(left, 1)}</span>
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-sm font-semibold text-zinc-500">{label}</span>
+      <span key={left} className="animate-pop text-9xl leading-none font-bold text-violet-600 tabular-nums dark:text-violet-400">
+        {left}
+      </span>
     </div>
   );
 }
@@ -306,10 +370,9 @@ function QuestionView({
   // nyampe -- biar tombol langsung kekunci & gak bisa dobel kirim.
   const [pendingValue, setPendingValue] = useState<number | null>(null);
 
-  const isReveal = state.phase === "reveal";
   const spectator = !state.you.playing;
   const answered = state.myAnswer?.value ?? pendingValue;
-  const locked = spectator || isReveal || answered !== null;
+  const locked = spectator || answered !== null;
   const myCorrect = state.myAnswer?.correct;
 
   const answer = (value: number) => {
@@ -325,8 +388,6 @@ function QuestionView({
 
   const optionClass = (value: number) => {
     const picked = answered === value;
-    if (isReveal && state.reveal && value === state.reveal.correctValue)
-      return "border-green-500 bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400";
     if (picked && myCorrect === false) return "border-red-500 bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400";
     if (picked) return "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300";
     return "border-black/[.08] bg-white text-black hover:border-violet-400 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50";
@@ -334,19 +395,7 @@ function QuestionView({
 
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-sm text-zinc-500">
-          <span>
-            Soal {q.index + 1} / {q.total}
-          </span>
-          {!isReveal && (
-            <span className={`font-semibold ${left <= 5 ? "text-red-500" : "text-zinc-500"}`}>⏱️ {left}s</span>
-          )}
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.08]">
-          <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${((q.index + 1) / q.total) * 100}%` }} />
-        </div>
-      </div>
+      <QuestionHeader state={state} right={<span className={`font-semibold ${left <= 5 ? "text-red-500" : "text-zinc-500"}`}>⏱️ {left}s</span>} />
 
       <div className="flex flex-col items-center gap-3 py-2">
         <div className="flex items-center gap-2">
@@ -363,11 +412,8 @@ function QuestionView({
       </div>
 
       {q.type === "essay_numeric" ? (
-        <div className="flex flex-col items-center gap-2">
-          {isReveal && state.reveal && (
-            <span className="text-sm font-semibold text-green-600 dark:text-green-400">Jawaban: {state.reveal.correctValue}</span>
-          )}
-          {!spectator && (
+        !spectator && (
+          <div className="flex flex-col items-center gap-2">
             <NumericKeypad
               value={answered !== null ? String(answered) : essayValue}
               onChange={setEssayValue}
@@ -375,8 +421,8 @@ function QuestionView({
               disabled={locked}
               feedback={myCorrect === true ? "correct" : myCorrect === false ? "incorrect" : null}
             />
-          )}
-        </div>
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {(q.options ?? []).map((value) => (
@@ -398,46 +444,139 @@ function QuestionView({
   );
 }
 
+function QuestionHeader({ state, right }: { state: RoomState; right?: React.ReactNode }) {
+  const q = state.question!;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between text-sm text-zinc-500">
+        <span>
+          Soal {q.index + 1} / {q.total}
+        </span>
+        {right}
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.08]">
+        <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${((q.index + 1) / q.total) * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function StatusLine({ state, answered }: { state: RoomState; answered: boolean }) {
   const isRace = state.room.mode === "race";
   const spectator = !state.you.playing;
-  const reveal = state.reveal;
   const base = "text-center text-sm font-medium";
-
-  if (state.phase === "reveal" && reveal) {
-    if (isRace) {
-      if (!reveal.winner) return <p className={`${base} text-zinc-500`}>Gak ada yang benar di soal ini.</p>;
-      const mine = reveal.winner.userId === state.you.userId;
-      return (
-        <p className={`${base} ${mine ? "text-green-600 dark:text-green-400" : "text-zinc-600 dark:text-zinc-300"}`}>
-          {mine ? "⚡ Kamu paling cepet! +1 poin" : `⚡ @${reveal.winner.nickname} paling cepet`}
-        </p>
-      );
-    }
-    const summary = `${reveal.correctCount} dari ${state.playingCount} pemain benar`;
-    if (spectator) return <p className={`${base} text-zinc-500`}>{summary}</p>;
-    const my = state.myAnswer;
-    return (
-      <div className="flex flex-col items-center gap-1">
-        {!my ? (
-          <p className={`${base} text-red-500`}>Waktu habis!</p>
-        ) : my.correct ? (
-          <p className={`${base} text-green-600 dark:text-green-400`}>Benar! +{my.points} poin</p>
-        ) : (
-          <p className={`${base} text-red-500`}>Salah</p>
-        )}
-        <p className="text-xs text-zinc-500">{summary}</p>
-      </div>
-    );
-  }
 
   const progress = `${state.answeredCount}/${state.playingCount} udah jawab`;
   if (spectator) return <p className={`${base} text-zinc-500`}>👀 Kamu nonton · {progress}</p>;
   if (isRace && state.myAnswer?.correct === false)
     return <p className={`${base} text-red-500`}>Salah! Kamu kekunci di soal ini, tunggu yang lain…</p>;
   if (answered)
-    return <p className={`${base} text-zinc-500`}>{isRace ? "Ngecek jawaban…" : `Jawaban terkirim, tunggu waktu habis · ${progress}`}</p>;
+    return (
+      <p className={`${base} text-zinc-500`}>
+        {isRace ? "Ngecek jawaban…" : `Jawaban terkirim, nunggu yang lain · ${progress}`}
+      </p>
+    );
   return <p className={`${base} text-zinc-400`}>{progress}</p>;
+}
+
+// WinnerFlash: adu cepat + showFastest -- pamer yang paling cepet jawab
+// benar sebentar sebelum cooldown.
+function WinnerFlash({ state }: { state: RoomState }) {
+  const winner = state.reveal?.winner;
+  if (!winner) return null;
+  const mine = winner.userId === state.you.userId;
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16 text-center">
+      <span className="animate-pop text-6xl">⚡</span>
+      <UserAvatar avatar={winner.avatar} size="lg" />
+      <span className="animate-pop text-3xl font-bold tracking-tight text-black dark:text-zinc-50">
+        {mine ? "Kamu paling cepet!" : `@${winner.nickname}`}
+      </span>
+      <span className={`text-sm font-medium ${mine ? "text-green-600 dark:text-green-400" : "text-zinc-500"}`}>
+        {mine ? "+1 poin" : "paling cepet jawab benar"}
+      </span>
+    </div>
+  );
+}
+
+// CooldownView: jeda antar soal -- angka hitung mundur gede + kunci jawaban
+// soal barusan + hasil kamu.
+function CooldownView({ state, clockOffset }: { state: RoomState; clockOffset: number }) {
+  const q = state.question!;
+  const isLast = q.index + 1 >= q.total;
+  return (
+    <>
+      <QuestionHeader state={state} />
+      <div className="flex flex-1 flex-col items-center justify-center gap-8 py-6 text-center">
+        <BigCountdown
+          endsAt={state.phaseEndsAt}
+          clockOffset={clockOffset}
+          label={isLast ? "Soal selesai! Hasil dalam" : `Soal ${q.index + 2} dalam`}
+        />
+        <div className="flex w-full flex-col items-center gap-2 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-900">
+          <span className="text-sm break-words text-zinc-500">{q.prompt}</span>
+          {state.reveal && (
+            <span className="text-2xl font-bold text-green-600 dark:text-green-400">Jawaban: {state.reveal.correctValue}</span>
+          )}
+          <CooldownResult state={state} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CooldownResult({ state }: { state: RoomState }) {
+  const reveal = state.reveal;
+  if (!reveal) return null;
+  const spectator = !state.you.playing;
+  const my = state.myAnswer;
+  const base = "text-center text-sm font-medium";
+
+  if (state.room.mode === "race") {
+    if (my?.correct) return <p className={`${base} text-green-600 dark:text-green-400`}>⚡ Kamu paling cepet! +1 poin</p>;
+    if (reveal.winner) return <p className={`${base} text-zinc-600 dark:text-zinc-300`}>⚡ @{reveal.winner.nickname} paling cepet</p>;
+    if (reveal.hasWinner) return <p className={`${base} text-zinc-600 dark:text-zinc-300`}>🤫 Ada yang jawab benar duluan…</p>;
+    return <p className={`${base} text-zinc-500`}>Gak ada yang benar di soal ini.</p>;
+  }
+
+  const summary = `${reveal.correctCount} dari ${state.playingCount} pemain benar`;
+  if (spectator) return <p className={`${base} text-zinc-500`}>{summary}</p>;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {!my ? (
+        <p className={`${base} text-red-500`}>Waktu habis!</p>
+      ) : my.correct ? (
+        <p className={`${base} text-green-600 dark:text-green-400`}>Benar! +{my.points} poin</p>
+      ) : (
+        <p className={`${base} text-red-500`}>Salah (jawabanmu {my.value})</p>
+      )}
+      <p className="text-xs text-zinc-500">{summary}</p>
+    </div>
+  );
+}
+
+// AwaitingResults: adu cepat yang hasilnya dirahasiain -- nunggu host buka.
+function AwaitingResults({ state, send }: { state: RoomState; send: (msg: ClientMessage) => boolean }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16 text-center">
+      <span className="text-6xl">🏁</span>
+      <h2 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">Semua soal selesai!</h2>
+      {state.you.isHost ? (
+        <>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Hasilnya masih rahasia. Buka kalau semua udah siap.</p>
+          <button
+            type="button"
+            onClick={() => send({ type: "reveal_results" })}
+            className="rounded-full bg-violet-600 px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-violet-700"
+          >
+            Tampilkan hasil 🏆
+          </button>
+        </>
+      ) : (
+        <p className="animate-pulse text-sm text-zinc-500 dark:text-zinc-400">🤫 Nunggu host nampilin hasil…</p>
+      )}
+    </div>
+  );
 }
 
 // ---------- Hasil ----------
@@ -445,6 +584,7 @@ function StatusLine({ state, answered }: { state: RoomState; answered: boolean }
 function Results({ state, onExit }: { state: RoomState; onExit: () => void }) {
   const results = state.results ?? [];
   const isRace = state.room.mode === "race";
+  const me = results.find((r) => r.player.userId === state.you.userId);
   const medal = (rank: number) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`);
 
   return (
@@ -494,6 +634,21 @@ function Results({ state, onExit }: { state: RoomState; onExit: () => void }) {
       {isRace && <p className="text-center text-xs text-zinc-400">Adu cepat: 1 poin tiap soal yang kamu jawab benar paling duluan.</p>}
 
       <div className="flex flex-col gap-2">
+        {me && state.matchId && (
+          <PathShareButton
+            path={matchSharePath(me.player.nickname, state.matchId)}
+            text={
+              buildMatchShareContent(
+                state.room.mode,
+                results.map((r) => ({ rank: r.rank, nickname: r.player.nickname })),
+                me.player.nickname,
+              ).text
+            }
+            fileName={`mathquest-multiplayer-${me.player.nickname}.png`}
+            label={me.rank === 1 ? "Pamerin kemenanganmu" : "Bagikan hasil"}
+            className="flex items-center justify-center gap-2 rounded-full bg-foreground py-3 text-sm font-semibold text-background"
+          />
+        )}
         {state.you.isHost && (
           <Link href="/multiplayer/buat" className="rounded-full bg-violet-600 py-3 text-center text-sm font-semibold text-white">
             Bikin room baru

@@ -1,6 +1,9 @@
 package multiplayer
 
 import (
+	"crypto/rand"
+	"fmt"
+	"log"
 	"math"
 	"sort"
 	"sync"
@@ -11,13 +14,21 @@ import (
 	"lesson/api/internal/curriculumsvc"
 )
 
+// Alur: lobby -> countdown -> [question -> (reveal) -> cooldown] x N ->
+// (awaiting_results -> results_countdown) -> finished. reveal cuma di race
+// kalau ShowFastest dan ada yang benar; awaiting_results/results_countdown
+// cuma di race kalau hasilnya dirahasiain (ShowFastest false). closed bisa
+// dari phase mana aja (host nutup room / expired).
 const (
-	PhaseLobby     = "lobby"
-	PhaseCountdown = "countdown"
-	PhaseQuestion  = "question"
-	PhaseReveal    = "reveal"
-	PhaseFinished  = "finished"
-	PhaseClosed    = "closed"
+	PhaseLobby            = "lobby"
+	PhaseCountdown        = "countdown"
+	PhaseQuestion         = "question"
+	PhaseReveal           = "reveal"
+	PhaseCooldown         = "cooldown"
+	PhaseAwaitingResults  = "awaiting_results"
+	PhaseResultsCountdown = "results_countdown"
+	PhaseFinished         = "finished"
+	PhaseClosed           = "closed"
 )
 
 // Room: satu game. SEMUA perubahan state lewat r.mu -- ini sekaligus yang
@@ -31,6 +42,7 @@ const (
 type Room struct {
 	code         string
 	settings     Settings
+	timing       Timing
 	sourceLabels []string
 	questions    []curriculumsvc.MultiplayerQuestion
 	hostID       string
@@ -50,6 +62,13 @@ type Room struct {
 	raceWinner  string
 	finishedAt  time.Time
 	results     []ResultEntry
+
+	awaitingSince time.Time
+	// matchID: keisi setelah hasil game sukses disimpen (buat link share).
+	matchID string
+	// saveMatch: nyimpen hasil ke DB (dipasang hub). Dipanggil di goroutine
+	// sendiri, gak pernah sambil megang r.mu.
+	saveMatch func(curriculumsvc.MultiplayerMatchRecord) error
 }
 
 type member struct {
@@ -70,11 +89,12 @@ type answer struct {
 	points    int
 }
 
-func newRoom(code string, settings Settings, labels []string, questions []curriculumsvc.MultiplayerQuestion, host *curriculumsvc.PlayerProfile) *Room {
+func newRoom(code string, settings Settings, timing Timing, labels []string, questions []curriculumsvc.MultiplayerQuestion, host *curriculumsvc.PlayerProfile) *Room {
 	now := time.Now()
 	r := &Room{
 		code:         code,
 		settings:     settings,
+		timing:       timing,
 		sourceLabels: labels,
 		questions:    questions,
 		hostID:       host.UserID,
@@ -147,8 +167,9 @@ func (r *Room) detach(userID string, c *client) {
 	}
 	m.conn = nil
 	m.disconnectedAt = time.Now()
-	r.broadcastLocked()
-	r.maybeEndRaceQuestionLocked()
+	if !r.maybeEndQuestionLocked() {
+		r.broadcastLocked()
+	}
 }
 
 func (r *Room) leave(userID string) {
@@ -172,8 +193,14 @@ func (r *Room) leave(userID string) {
 		m.conn.shutdown(websocket.StatusNormalClosure, "left")
 		m.conn = nil
 	}
-	r.broadcastLocked()
-	r.maybeEndRaceQuestionLocked()
+	if userID == r.hostID && r.phase == PhaseAwaitingResults {
+		// Host cabut tanpa nutup room -> hasilnya dibuka buat yang lain.
+		r.revealResultsLocked()
+		return
+	}
+	if !r.maybeEndQuestionLocked() {
+		r.broadcastLocked()
+	}
 }
 
 func (r *Room) removeMemberLocked(userID string) {
@@ -252,6 +279,8 @@ func (r *Room) start(hostID string) string {
 	return ""
 }
 
+// closeByHost: "kill room" -- bisa kapan aja, termasuk di tengah game. Semua
+// pemain langsung dikeluarin (hasil game yang belum selesai gak disimpen).
 func (r *Room) closeByHost(hostID string) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -259,10 +288,22 @@ func (r *Room) closeByHost(hostID string) string {
 	if hostID != r.hostID {
 		return "forbidden"
 	}
-	if r.phase != PhaseLobby && r.phase != PhaseFinished {
-		return "game_started"
-	}
 	r.closeLocked("host_closed")
+	return ""
+}
+
+// revealResults: host buka hasil yang dirahasiain -> countdown -> finished.
+func (r *Room) revealResults(hostID string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if hostID != r.hostID {
+		return "forbidden"
+	}
+	if r.phase != PhaseAwaitingResults {
+		return "invalid_phase"
+	}
+	r.revealResultsLocked()
 	return ""
 }
 
@@ -320,19 +361,58 @@ func (r *Room) beginQuestionLocked(index int) {
 	r.broadcastLocked()
 }
 
+// endQuestionLocked: soal ditutup. Race + ShowFastest + ada pemenang ->
+// pamer pemenangnya dulu (reveal), baru cooldown.
 func (r *Room) endQuestionLocked() {
-	reveal := classicRevealDuration
-	if r.settings.Mode == ModeRace {
-		reveal = raceRevealDuration
+	if r.settings.Mode == ModeRace && r.settings.ShowFastest && r.raceWinner != "" {
+		r.phase = PhaseReveal
+		r.phaseEndsAt = time.Now().Add(r.timing.WinnerReveal)
+		r.scheduleLocked(r.timing.WinnerReveal, r.beginCooldownLocked)
+		r.broadcastLocked()
+		return
 	}
-	r.phase = PhaseReveal
-	r.phaseEndsAt = time.Now().Add(reveal)
+	r.beginCooldownLocked()
+}
+
+// beginCooldownLocked: jeda antar soal (kunci jawaban + hitung mundur gede),
+// termasuk setelah soal terakhir sebelum hasil keluar.
+func (r *Room) beginCooldownLocked() {
+	r.phase = PhaseCooldown
+	r.phaseEndsAt = time.Now().Add(r.timing.Cooldown)
 	next := r.qIndex + 1
 	if next < len(r.questions) {
-		r.scheduleLocked(reveal, func() { r.beginQuestionLocked(next) })
+		r.scheduleLocked(r.timing.Cooldown, func() { r.beginQuestionLocked(next) })
 	} else {
-		r.scheduleLocked(reveal, r.finishLocked)
+		r.scheduleLocked(r.timing.Cooldown, r.endGameLocked)
 	}
+	r.broadcastLocked()
+}
+
+// hidesResults: race tanpa ShowFastest -- pemenang soal & hasil akhir
+// dirahasiain sampai host buka.
+func (r *Room) hidesResults() bool {
+	return r.settings.Mode == ModeRace && !r.settings.ShowFastest
+}
+
+// endGameLocked: semua soal selesai. Ranking dihitung (& disimpen) sekarang,
+// ditampilinnya langsung atau nunggu host.
+func (r *Room) endGameLocked() {
+	r.results = r.computeResultsLocked()
+	r.recordMatchLocked()
+	if r.hidesResults() {
+		r.phase = PhaseAwaitingResults
+		r.awaitingSince = time.Now()
+		r.phaseEndsAt = time.Time{}
+		r.broadcastLocked()
+		return
+	}
+	r.finishLocked()
+}
+
+func (r *Room) revealResultsLocked() {
+	r.phase = PhaseResultsCountdown
+	r.phaseEndsAt = time.Now().Add(r.timing.ResultsCountdown)
+	r.scheduleLocked(r.timing.ResultsCountdown, r.finishLocked)
 	r.broadcastLocked()
 }
 
@@ -340,8 +420,33 @@ func (r *Room) finishLocked() {
 	r.phase = PhaseFinished
 	r.finishedAt = time.Now()
 	r.phaseEndsAt = time.Time{}
-	r.results = r.computeResultsLocked()
 	r.broadcastLocked()
+}
+
+// recordMatchLocked: simpen hasil (siapa & rank-nya) buat kartu share. Jalan
+// di goroutine; matchID baru dikirim ke klien setelah beneran kesimpen, jadi
+// tombol share gak pernah ngarah ke link yang 404.
+func (r *Room) recordMatchLocked() {
+	if r.saveMatch == nil || len(r.results) == 0 {
+		return
+	}
+	rec := curriculumsvc.MultiplayerMatchRecord{ID: newUUID(), Mode: r.settings.Mode, QuestionCount: len(r.questions)}
+	for _, e := range r.results {
+		rec.Players = append(rec.Players, curriculumsvc.MultiplayerMatchRecordPlayer{UserID: e.Player.UserID, Rank: e.Rank})
+	}
+	save := r.saveMatch
+	go func() {
+		if err := save(rec); err != nil {
+			log.Printf("multiplayer: simpan match room %s gagal: %v", r.code, err)
+			return
+		}
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		r.matchID = rec.ID
+		if r.phase != PhaseClosed {
+			r.broadcastLocked()
+		}
+	}()
 }
 
 // submitAnswer: index wajib sama dengan soal yang lagi jalan -- jawaban telat
@@ -380,12 +485,8 @@ func (r *Room) submitAnswer(userID string, index int, value float64) string {
 			m.correct++
 			m.correctMs += elapsed
 		}
-		r.broadcastLocked()
-		return ""
-	}
-
-	// Race: yang pertama benar menang, soal langsung ditutup.
-	if a.correct && r.raceWinner == "" {
+	} else if a.correct && r.raceWinner == "" {
+		// Race: yang pertama benar menang, soal langsung ditutup.
 		r.raceWinner = userID
 		a.points = 1
 		m.score++
@@ -394,25 +495,35 @@ func (r *Room) submitAnswer(userID string, index int, value float64) string {
 		r.endQuestionLocked()
 		return ""
 	}
-	r.broadcastLocked()
-	r.maybeEndRaceQuestionLocked()
+	if !r.maybeEndQuestionLocked() {
+		r.broadcastLocked()
+	}
 	return ""
 }
 
-// maybeEndRaceQuestionLocked: race -- kalau semua pemain yang masih online
-// udah salah (kekunci), gak ada gunanya nunggu timer.
-func (r *Room) maybeEndRaceQuestionLocked() {
-	if r.settings.Mode != ModeRace || r.phase != PhaseQuestion {
-		return
+// maybeEndQuestionLocked: kalau semua pemain yang masih online udah jawab
+// (classic) / udah salah semua (race -- yang benar udah nutup soal duluan),
+// sisa waktu soal di-skip. Minimal harus ada 1 pemain online: kalau semua
+// lagi putus barengan (mis. iOS nutup socket), timer yang jalan biar soalnya
+// gak kelewat semua. Balikin true kalau soalnya ditutup (udah broadcast).
+func (r *Room) maybeEndQuestionLocked() bool {
+	if r.phase != PhaseQuestion {
+		return false
 	}
+	online := 0
 	for _, m := range r.members {
 		if m.playing && !m.left && m.conn != nil {
+			online++
 			if _, done := r.answers[m.profile.UserID]; !done {
-				return
+				return false
 			}
 		}
 	}
+	if online == 0 {
+		return false
+	}
 	r.endQuestionLocked()
+	return true
 }
 
 // ---------- janitor ----------
@@ -429,6 +540,12 @@ func (r *Room) sweep(now time.Time) bool {
 		if now.Sub(r.finishedAt) > finishedRoomTTL {
 			r.closeLocked("expired")
 			return true
+		}
+	case PhaseAwaitingResults:
+		host := r.members[r.hostID]
+		hostGone := host.left || (host.conn == nil && now.Sub(host.disconnectedAt) > lobbyHostAbsentLimit)
+		if hostGone || now.Sub(r.awaitingSince) > awaitingResultsLimit {
+			r.revealResultsLocked()
 		}
 	case PhaseLobby:
 		host := r.members[r.hostID]
@@ -459,10 +576,10 @@ func (r *Room) isActiveHostedBy(userID string) (active, inLobby bool) {
 	switch r.phase {
 	case PhaseLobby:
 		return true, true
-	case PhaseCountdown, PhaseQuestion, PhaseReveal:
-		return true, false
+	case PhaseFinished, PhaseClosed:
+		return false, false
 	}
-	return false, false
+	return true, false
 }
 
 // ---------- helper ----------
@@ -524,4 +641,14 @@ func sameStanding(a, b ResultEntry) bool {
 
 func floatEquals(a, b float64) bool {
 	return math.Abs(a-b) < 1e-9
+}
+
+// newUUID: UUID v4 (id match, dibikin di sini biar bisa dikirim ke klien
+// tanpa nunggu balikan DB).
+func newUUID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

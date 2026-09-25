@@ -149,6 +149,10 @@ func (h *Hub) CreateRoom(ctx context.Context, hostID string, settings Settings) 
 	if err != nil {
 		return "", err
 	}
+	cfg, err := h.curriculum.GetMultiplayerConfig(ctx)
+	if err != nil {
+		return "", err
+	}
 
 	// Satu host cuma boleh punya 1 room aktif. Lobby lama ditutup otomatis,
 	// tapi game yang lagi jalan gak diganggu.
@@ -172,8 +176,24 @@ func (h *Hub) CreateRoom(ctx context.Context, hostID string, settings Settings) 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	code := h.newCodeLocked()
-	h.rooms[code] = newRoom(code, settings, labels, questions, host)
+	room := newRoom(code, settings, timingFromConfig(cfg, settings.Mode), labels, questions, host)
+	room.saveMatch = h.saveMatch
+	h.rooms[code] = room
 	return code, nil
+}
+
+func (h *Hub) saveMatch(rec curriculumsvc.MultiplayerMatchRecord) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return h.curriculum.SaveMultiplayerMatch(ctx, rec)
+}
+
+// MatchShare: data publik kartu share hasil game.
+func (h *Hub) MatchShare(ctx context.Context, matchID string) (*curriculumsvc.MatchShare, error) {
+	if !uuidPattern.MatchString(matchID) {
+		return nil, curriculumsvc.ErrNotFound
+	}
+	return h.curriculum.GetMatchShare(ctx, matchID)
 }
 
 func (h *Hub) newCodeLocked() string {

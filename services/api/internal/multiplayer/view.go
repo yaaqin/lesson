@@ -25,6 +25,8 @@ type View struct {
 	MyAnswer      *MyAnswerView `json:"myAnswer,omitempty"`
 	Reveal        *RevealView   `json:"reveal,omitempty"`
 	Results       []ResultEntry `json:"results,omitempty"`
+	// MatchID: id hasil yang udah kesimpen (buat link share), cuma di finished.
+	MatchID string `json:"matchId,omitempty"`
 }
 
 type RoomInfo struct {
@@ -33,6 +35,7 @@ type RoomInfo struct {
 	QuestionCount      int      `json:"questionCount"`
 	Format             string   `json:"format"`
 	SecondsPerQuestion int      `json:"secondsPerQuestion"`
+	ShowFastest        bool     `json:"showFastest"`
 	Sources            []string `json:"sources"`
 	HostID             string   `json:"hostId"`
 	MaxPlayers         int      `json:"maxPlayers"`
@@ -62,8 +65,8 @@ type QuestionView struct {
 	Options  []float64 `json:"options,omitempty"`
 }
 
-// MyAnswerView: Correct keisi di reveal (classic) atau langsung setelah jawab
-// (race, biar yang salah tau dirinya kekunci).
+// MyAnswerView: Correct keisi setelah soal ditutup (classic) atau langsung
+// setelah jawab (race, biar yang salah tau dirinya kekunci).
 type MyAnswerView struct {
 	Value   float64 `json:"value"`
 	Correct *bool   `json:"correct,omitempty"`
@@ -74,8 +77,10 @@ type RevealView struct {
 	CorrectValue  float64 `json:"correctValue"`
 	CorrectCount  int     `json:"correctCount"`
 	AnsweredCount int     `json:"answeredCount"`
-	// Race: siapa yang dapet poin soal ini (nil = gak ada yang benar).
-	Winner *curriculumsvc.PlayerProfile `json:"winner,omitempty"`
+	// Race: ada yang dapet poin soal ini atau gak. Winner (siapa orangnya)
+	// cuma dikirim kalau room-nya ShowFastest.
+	HasWinner bool                         `json:"hasWinner"`
+	Winner    *curriculumsvc.PlayerProfile `json:"winner,omitempty"`
 }
 
 type ResultEntry struct {
@@ -99,6 +104,7 @@ func (r *Room) viewForLocked(userID string, now time.Time) View {
 			QuestionCount:      len(r.questions),
 			Format:             r.settings.Format,
 			SecondsPerQuestion: r.settings.SecondsPerQuestion,
+			ShowFastest:        r.settings.ShowFastest,
 			Sources:            r.sourceLabels,
 			HostID:             r.hostID,
 			MaxPlayers:         MaxPlayers,
@@ -122,7 +128,8 @@ func (r *Room) viewForLocked(userID string, now time.Time) View {
 		})
 	}
 
-	if r.phase == PhaseQuestion || r.phase == PhaseReveal {
+	closed := r.phase == PhaseReveal || r.phase == PhaseCooldown
+	if r.phase == PhaseQuestion || closed {
 		q := r.questions[r.qIndex]
 		v.Question = &QuestionView{
 			Index: r.qIndex, Total: len(r.questions), TierCode: q.TierCode,
@@ -132,14 +139,14 @@ func (r *Room) viewForLocked(userID string, now time.Time) View {
 
 		if a, ok := r.answers[userID]; ok {
 			v.MyAnswer = &MyAnswerView{Value: a.value}
-			if r.phase == PhaseReveal || r.settings.Mode == ModeRace {
+			if closed || r.settings.Mode == ModeRace {
 				correct, points := a.correct, a.points
 				v.MyAnswer.Correct = &correct
 				v.MyAnswer.Points = &points
 			}
 		}
 
-		if r.phase == PhaseReveal {
+		if closed {
 			rv := &RevealView{CorrectValue: q.CorrectValue, AnsweredCount: len(r.answers)}
 			for _, a := range r.answers {
 				if a.correct {
@@ -150,8 +157,11 @@ func (r *Room) viewForLocked(userID string, now time.Time) View {
 				// Race: yang dihitung benar cuma pemenangnya (jawaban benar
 				// yang telat udah ditolak sebelum masuk r.answers).
 				if w, ok := r.members[r.raceWinner]; ok {
-					winner := w.profile
-					rv.Winner = &winner
+					rv.HasWinner = true
+					if r.settings.ShowFastest {
+						winner := w.profile
+						rv.Winner = &winner
+					}
 				}
 			}
 			v.Reveal = rv
@@ -160,6 +170,7 @@ func (r *Room) viewForLocked(userID string, now time.Time) View {
 
 	if r.phase == PhaseFinished {
 		v.Results = r.results
+		v.MatchID = r.matchID
 	}
 	return v
 }
