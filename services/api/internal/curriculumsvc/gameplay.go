@@ -41,15 +41,19 @@ func (s *Service) StartChallenge(ctx context.Context, userID, challengeID string
 		questionCountRequired int
 		passThresholdPercent  int
 		timeLimitSeconds      int
+		batchID               *string
 	)
 	err = s.db.QueryRow(ctx, `
-		SELECT name, is_exam, question_count_required, pass_threshold_percent, time_limit_seconds
+		SELECT name, is_exam, question_count_required, pass_threshold_percent, time_limit_seconds, batch_id
 		FROM challenges WHERE id = $1
-	`, challengeID).Scan(&name, &isExam, &questionCountRequired, &passThresholdPercent, &timeLimitSeconds)
+	`, challengeID).Scan(&name, &isExam, &questionCountRequired, &passThresholdPercent, &timeLimitSeconds, &batchID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
+		return nil, err
+	}
+	if err := s.ensureChallengeUnlocked(ctx, userID, batchID, isExam); err != nil {
 		return nil, err
 	}
 

@@ -2,6 +2,7 @@ package curriculumsvc
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -155,5 +156,17 @@ func (s *Service) ListChallenges(ctx context.Context, batchID, userID string) ([
 		}
 		items = append(items, c)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	access, err := s.batchAccess(ctx, userID, batchID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return items, nil
+		}
+		return nil, err
+	}
+	applyBatchLocks(items, access)
+	return items, nil
 }

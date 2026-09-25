@@ -136,7 +136,11 @@ export default function ChallengePage() {
         setBlockedReason(
           code === "no_lives"
             ? "Nyawa kamu habis. Tunggu reset besok, ya."
-            : "Gagal memulai challenge, coba lagi.",
+            : code === "batch_locked"
+              ? "Batch ini masih kekunci. Lulus ujian batch sebelumnya dulu, ya."
+              : code === "exam_locked"
+                ? "Ujian ini masih kekunci. Lulus lebih banyak latihan di batch ini dulu, ya."
+                : "Gagal memulai challenge, coba lagi.",
         );
         setPhase("blocked");
       },

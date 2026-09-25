@@ -82,18 +82,16 @@ export default function TierBatchPage() {
             )}
 
             <div className="flex flex-col gap-3">
-              {challengesQuery.data?.map((challenge, index) => (
-                <div key={challenge.id} className="flex flex-col gap-3">
-                  {(index === 0 ||
-                    challenge.batchName !== challengesQuery.data[index - 1].batchName) && (
-                    <h2 className="mt-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase first:mt-0 dark:text-zinc-500">
-                      {challenge.batchName}
-                    </h2>
-                  )}
-                  <Link
-                    href={`/belajar/${params.tierCode}/${challenge.id}`}
-                    className="flex items-center gap-4 rounded-2xl border border-black/[.08] bg-white px-5 py-4 transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
-                  >
+              {challengesQuery.data?.map((challenge, index) => {
+                const isFirstOfBatch =
+                  index === 0 || challenge.batchName !== challengesQuery.data[index - 1].batchName;
+                const batchLocked = challenge.lockReason === "batch";
+                const prevBatchName = previousBatchName(batches ?? [], challenge.batchName);
+                const rowClass = `flex items-center gap-4 rounded-2xl border border-black/[.08] bg-white px-5 py-4 transition-colors dark:border-white/[.145] dark:bg-zinc-900 ${
+                  challenge.locked ? "cursor-not-allowed opacity-60" : "hover:border-blue-400"
+                }`;
+                const rowContent = (
+                  <>
                     <span
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ${
                         challenge.isExam ? "bg-amber-500" : "bg-blue-600 dark:bg-blue-500"
@@ -117,8 +115,18 @@ export default function TierBatchPage() {
                           ? `${challenge.timeLimitSeconds}s total`
                           : `${challenge.timeLimitSeconds}s / soal`}
                       </span>
+                      {challenge.isExam && challenge.lockReason === "exam" && (
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                          Lulus {challenge.examPassedCount ?? 0}/{challenge.examRequiredPassed} latihan di batch ini buat
+                          buka ujian
+                        </span>
+                      )}
                     </div>
-                    {challenge.completed ? (
+                    {challenge.locked ? (
+                      <span className="shrink-0 text-lg" aria-label="Terkunci">
+                        🔒
+                      </span>
+                    ) : challenge.completed ? (
                       <span className="shrink-0 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400">
                         Selesai ✓
                       </span>
@@ -127,9 +135,35 @@ export default function TierBatchPage() {
                         Mulai →
                       </span>
                     )}
-                  </Link>
-                </div>
-              ))}
+                  </>
+                );
+                return (
+                  <div key={challenge.id} className="flex flex-col gap-3">
+                    {isFirstOfBatch && (
+                      <div className="mt-2 flex flex-col gap-0.5 first:mt-0">
+                        <h2 className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
+                          {batchLocked && <span aria-hidden>🔒</span>}
+                          {challenge.batchName}
+                        </h2>
+                        {batchLocked && (
+                          <span className="text-xs text-zinc-500">
+                            Lulus ujian {prevBatchName ?? "batch sebelumnya"} dulu buat buka batch ini.
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {challenge.locked ? (
+                      <div className={rowClass} aria-disabled="true">
+                        {rowContent}
+                      </div>
+                    ) : (
+                      <Link href={`/belajar/${params.tierCode}/${challenge.id}`} className={rowClass}>
+                        {rowContent}
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         ) : (
@@ -155,4 +189,9 @@ export default function TierBatchPage() {
       </main>
     </div>
   );
+}
+
+function previousBatchName(batches: { name: string }[], batchName: string) {
+  const i = batches.findIndex((b) => b.name === batchName);
+  return i > 0 ? batches[i - 1].name : null;
 }

@@ -33,6 +33,13 @@ type ChallengeListItem struct {
 	TimeLimitSeconds      int    `json:"timeLimitSeconds"`
 	Completed             bool   `json:"completed"`
 	HasEssay              bool   `json:"hasEssay"`
+	// Kunci progres (lihat unlock.go). LockReason: "batch" | "exam".
+	Locked     bool   `json:"locked"`
+	LockReason string `json:"lockReason,omitempty"`
+	// Cuma keisi buat challenge ujian: butuh lulus berapa latihan di batch
+	// ini buat buka ujian, dan udah lulus berapa.
+	ExamRequiredPassed int `json:"examRequiredPassed,omitempty"`
+	ExamPassedCount    int `json:"examPassedCount,omitempty"`
 }
 
 // --- Gameplay ---

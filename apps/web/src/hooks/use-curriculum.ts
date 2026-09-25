@@ -15,6 +15,12 @@ export type ChallengeListItem = {
   timeLimitSeconds: number;
   completed: boolean;
   hasEssay: boolean;
+  // Kunci progres dari server: "batch" = ujian batch sebelumnya belum lulus,
+  // "exam" = latihan di batch ini yang lulus belum cukup buat buka ujian.
+  locked: boolean;
+  lockReason?: "batch" | "exam";
+  examRequiredPassed?: number;
+  examPassedCount?: number;
 };
 
 export type QuestionType = "multiple_choice" | "essay_numeric" | "grid_puzzle";

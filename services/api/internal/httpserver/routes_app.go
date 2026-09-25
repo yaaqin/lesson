@@ -124,6 +124,10 @@ func (s *Server) handleStartChallenge(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "challenge_not_found")
 		case errors.Is(err, curriculumsvc.ErrNoLives):
 			writeError(w, http.StatusForbidden, "no_lives")
+		case errors.Is(err, curriculumsvc.ErrBatchLocked):
+			writeError(w, http.StatusForbidden, "batch_locked")
+		case errors.Is(err, curriculumsvc.ErrExamLocked):
+			writeError(w, http.StatusForbidden, "exam_locked")
 		case errors.Is(err, curriculumsvc.ErrNotEnoughBank):
 			writeError(w, http.StatusConflict, "not_enough_questions")
 		default:
