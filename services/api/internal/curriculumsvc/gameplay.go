@@ -298,9 +298,9 @@ func (s *Service) SubmitAttempt(ctx context.Context, userID, attemptID string, a
 	if _, err := s.db.Exec(ctx, `
 		UPDATE challenge_attempts
 		SET status = $1, score_percent = $2, answers_submitted = $3, completed_at = now(),
-			risk_score = $4, risk_level = $5
-		WHERE id = $6
-	`, newStatus, scorePercent, answersJSON, riskScore, riskLevel, attemptID); err != nil {
+			risk_score = $4, risk_level = $5, correct_count = $6
+		WHERE id = $7
+	`, newStatus, scorePercent, answersJSON, riskScore, riskLevel, correctCount, attemptID); err != nil {
 		return nil, err
 	}
 

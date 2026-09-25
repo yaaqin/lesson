@@ -157,6 +157,37 @@ export function useChallengesByCategoryQuery(categoryId: string | undefined) {
   });
 }
 
+// Jenjang yang punya ranking (sinkron sama TierLeaderboardCodes di
+// services/api curriculumsvc/tier_leaderboard.go).
+export const TIER_LEADERBOARD_CODES = ["sd", "smp", "smk", "kampus"];
+
+export type TierLeaderboardEntry = {
+  rank: number;
+  nickname: string;
+  avatar: UserAvatar;
+  points: number;
+  challengesCompleted: number;
+  examsPassed: number;
+  lastScoredAt: string;
+  isMe: boolean;
+};
+
+export type TierLeaderboard = {
+  tierCode: string;
+  tierName: string;
+  entries: TierLeaderboardEntry[];
+  // Keisi kalau user sendiri ada di ranking tapi di luar top 100.
+  me: TierLeaderboardEntry | null;
+  totalRanked: number;
+};
+
+export function useTierLeaderboardQuery(tierCode: string) {
+  return useQuery({
+    queryKey: ["tier-leaderboard", tierCode],
+    queryFn: async () => (await privateApi.get<TierLeaderboard>(`/app/tiers/${tierCode}/leaderboard`)).data,
+  });
+}
+
 export function useMeQuery() {
   return useQuery({
     queryKey: ["me"],
@@ -205,6 +236,7 @@ export function useSubmitAttemptMutation() {
       queryClient.invalidateQueries({ queryKey: ["me"] });
       queryClient.invalidateQueries({ queryKey: ["challenges"] });
       queryClient.invalidateQueries({ queryKey: ["challenges-by-category"] });
+      queryClient.invalidateQueries({ queryKey: ["tier-leaderboard"] });
     },
   });
 }

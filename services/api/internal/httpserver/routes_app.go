@@ -14,6 +14,7 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /app/tiers", s.handleListTiers)
 	mux.HandleFunc("GET /app/tiers/{tierCode}/batches", s.handleListBatches)
 	mux.HandleFunc("GET /app/tiers/{tierCode}/categories", s.handleListCategories)
+	mux.HandleFunc("GET /app/tiers/{tierCode}/leaderboard", s.handleGetTierLeaderboard)
 	mux.HandleFunc("GET /app/batches/{batchId}/challenges", s.handleListChallenges)
 	mux.HandleFunc("GET /app/categories/{categoryId}/challenges", s.handleListChallengesByCategory)
 	mux.HandleFunc("GET /app/challenges/{challengeId}", s.notImplemented)
@@ -76,6 +77,27 @@ func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, categories)
+}
+
+// handleGetTierLeaderboard: top 100 achievement per jenjang (sd/smp/smk/kampus),
+// bisa diliat semua user yang login.
+func (s *Server) handleGetTierLeaderboard(w http.ResponseWriter, r *http.Request) {
+	claims, ok := s.authenticate(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	board, err := s.curriculum.GetTierLeaderboard(r.Context(), claims.Subject, r.PathValue("tierCode"))
+	if err != nil {
+		if errors.Is(err, curriculumsvc.ErrTierNoLeaderboard) {
+			writeError(w, http.StatusNotFound, "leaderboard_not_found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, board)
 }
 
 func (s *Server) handleListChallengesByCategory(w http.ResponseWriter, r *http.Request) {

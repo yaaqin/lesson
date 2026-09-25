@@ -11,6 +11,7 @@ import {
   useChallengesForBatchesQuery,
   useMeQuery,
   useTiersQuery,
+  TIER_LEADERBOARD_CODES,
 } from "@/hooks/use-curriculum";
 import { BackButton } from "@/components/back-button";
 
@@ -71,6 +72,14 @@ export default function TierBatchPage() {
           <div className="-ml-2 flex items-center gap-1">
             <BackButton href="/belajar" label="Ganti jenjang" />
             <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">{tier?.name ?? params.tierCode.toUpperCase()}</h1>
+            {TIER_LEADERBOARD_CODES.includes(params.tierCode) && (
+              <Link
+                href={`/belajar/${params.tierCode}/ranking`}
+                className="ml-auto rounded-full border border-black/[.08] px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-[#1a1a1a]"
+              >
+                🏆 Ranking
+              </Link>
+            )}
           </div>
         </div>
 
