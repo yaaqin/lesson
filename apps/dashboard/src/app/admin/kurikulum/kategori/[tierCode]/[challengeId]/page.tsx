@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
@@ -17,6 +16,7 @@ import {
 } from "@/hooks/use-admin-puzzle-questions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
+import { BackButton } from "@/components/back-button";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
@@ -130,15 +130,10 @@ export default function AdminPuzzleQuestionsPage() {
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-8">
         <div className="flex flex-col gap-1">
-          <Link
-            href={`/admin/kurikulum/kategori/${params.tierCode}`}
-            className="text-sm font-medium text-blue-600 dark:text-blue-400"
-          >
-            ← Kembali ke Kategori
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            {challenge ? challenge.name : "Soal Puzzle"}
-          </h1>
+          <div className="-ml-2 flex items-center gap-1">
+            <BackButton href={`/admin/kurikulum/kategori/${params.tierCode}`} label="Kembali ke Kategori" />
+            <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">{challenge ? challenge.name : "Soal Puzzle"}</h1>
+          </div>
           {challenge && (
             <p className="text-sm text-zinc-500 dark:text-zinc-500">
               {challenge.categoryName} ·{" "}

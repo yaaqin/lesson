@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
@@ -8,6 +7,7 @@ import { useLogoutMutation } from "@/hooks/use-auth";
 import { useAdminUserDetailQuery, useResetUserLivesMutation } from "@/hooks/use-admin-users";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
+import { BackButton } from "@/components/back-button";
 
 export default function AdminUserDetailPage() {
   const router = useRouter();
@@ -77,9 +77,10 @@ export default function AdminUserDetailPage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-6 py-8">
-        <Link href="/admin/users" className="text-sm font-medium text-blue-600 dark:text-blue-400">
-          ← Daftar User
-        </Link>
+        <div className="-ml-2 flex items-center gap-1">
+          <BackButton href="/admin/users" label="Daftar User" />
+          <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">Detail User</h1>
+        </div>
 
         {userDetailQuery.isLoading && (
           <p className="text-sm text-zinc-500 dark:text-zinc-500">Memuat detail user…</p>

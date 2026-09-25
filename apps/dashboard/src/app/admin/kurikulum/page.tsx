@@ -11,6 +11,7 @@ import {
   type AdminChallenge,
 } from "@/hooks/use-admin-curriculum";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
+import { BackButton } from "@/components/back-button";
 
 export default function AdminKurikulumPage() {
   const router = useRouter();
@@ -63,12 +64,10 @@ export default function AdminKurikulumPage() {
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-8">
         <div className="flex flex-col gap-1">
-          <Link href="/admin" className="text-sm font-medium text-blue-600 dark:text-blue-400">
-            ← Kembali
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            Kurikulum
-          </h1>
+          <div className="-ml-2 flex items-center gap-1">
+            <BackButton href="/admin" label="Kembali" />
+            <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">Kurikulum</h1>
+          </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-500">
             Waktu challenge biasa = detik per soal. Waktu ujian (🏁) = total detik buat semua
             soal.

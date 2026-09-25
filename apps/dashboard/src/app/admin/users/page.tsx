@@ -13,6 +13,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useLogoutMutation } from "@/hooks/use-auth";
 import { useAdminUsersQuery, type AdminUserListItem } from "@/hooks/use-admin-users";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
+import { BackButton } from "@/components/back-button";
 
 const PAGE_SIZE = 20;
 
@@ -151,12 +152,10 @@ export default function AdminUsersPage() {
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-6 py-8">
         <div className="flex flex-col gap-1">
-          <Link href="/admin" className="text-sm font-medium text-blue-600 dark:text-blue-400">
-            ← Kembali
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            Daftar User
-          </h1>
+          <div className="-ml-2 flex items-center gap-1">
+            <BackButton href="/admin" label="Kembali" />
+            <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">Daftar User</h1>
+          </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-500">
             Murid terdaftar — klik &ldquo;Detail&rdquo; buat lihat streak, nyawa, dan reset nyawa manual.
           </p>

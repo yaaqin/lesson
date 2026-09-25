@@ -12,6 +12,7 @@ import {
   useMeQuery,
   useTiersQuery,
 } from "@/hooks/use-curriculum";
+import { BackButton } from "@/components/back-button";
 
 export default function TierBatchPage() {
   const router = useRouter();
@@ -67,12 +68,10 @@ export default function TierBatchPage() {
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-8">
         <div className="flex flex-col gap-1">
-          <Link href="/belajar" className="text-sm font-medium text-blue-600 dark:text-blue-400">
-            ← Ganti jenjang
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            {tier?.name ?? params.tierCode.toUpperCase()}
-          </h1>
+          <div className="-ml-2 flex items-center gap-1">
+            <BackButton href="/belajar" label="Ganti jenjang" />
+            <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">{tier?.name ?? params.tierCode.toUpperCase()}</h1>
+          </div>
         </div>
 
         {usesBatch ? (

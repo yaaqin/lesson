@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useRequireNickname } from "@/hooks/use-profile";
 import { useCategoriesQuery, useChallengesByCategoryQuery, useMeQuery } from "@/hooks/use-curriculum";
+import { BackButton } from "@/components/back-button";
 
 export default function CategoryChallengesPage() {
   const router = useRouter();
@@ -55,15 +56,10 @@ export default function CategoryChallengesPage() {
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-8">
         <div className="flex flex-col gap-1">
-          <Link
-            href={`/belajar/${params.tierCode}`}
-            className="text-sm font-medium text-blue-600 dark:text-blue-400"
-          >
-            ← Ganti kategori
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            {category?.name ?? "Kategori"}
-          </h1>
+          <div className="-ml-2 flex items-center gap-1">
+            <BackButton href={`/belajar/${params.tierCode}`} label="Ganti kategori" />
+            <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">{category?.name ?? "Kategori"}</h1>
+          </div>
         </div>
 
         {challengesQuery.isLoading && (

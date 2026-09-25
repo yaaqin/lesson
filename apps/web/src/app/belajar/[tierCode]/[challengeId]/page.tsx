@@ -19,6 +19,9 @@ import { useVisibilityTracker } from "@/hooks/use-visibility-tracker";
 import { useFullscreenGuard } from "@/hooks/use-fullscreen-guard";
 import { QuestionGuard } from "@/components/question-guard";
 import { NumericKeypad } from "@/components/numeric-keypad";
+import { BackButton } from "@/components/back-button";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 
 // "intro" = layar aturan sebelum mulai: attempt baru dibikin (dan fullscreen
 // diminta) pas user klik "Mulai Challenge", karena requestFullscreen wajib
@@ -322,12 +325,7 @@ export default function ChallengePage() {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link
-          href={`/belajar/${params.tierCode}`}
-          className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
-        >
-          ← Keluar
-        </Link>
+        <BackButton href={`/belajar/${params.tierCode}`} label="Keluar" />
         <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
           {game.challengeName}
         </span>
@@ -860,8 +858,12 @@ function IntroView({
           Mulai Challenge
         </button>
       </div>
-      <Link href={`/belajar/${tierCode}`} className="text-sm font-medium text-zinc-500 dark:text-zinc-500">
-        ← Kembali ke daftar
+      <Link
+        href={`/belajar/${tierCode}`}
+        className="flex items-center gap-1 text-sm font-medium text-zinc-500 dark:text-zinc-500"
+      >
+        <HugeiconsIcon icon={ArrowLeft02Icon} size={16} strokeWidth={1.8} />
+        Kembali ke daftar
       </Link>
     </div>
   );

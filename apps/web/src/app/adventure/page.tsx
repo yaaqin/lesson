@@ -21,6 +21,7 @@ import {
 import { QuestionGuard } from "@/components/question-guard";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { formatDuration, formatTimePercent } from "@/lib/duration";
+import { BackButton } from "@/components/back-button";
 
 type Phase = "lobby" | "loading" | "playing" | "passed" | "failed";
 
@@ -284,12 +285,7 @@ export default function AdventurePage() {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       <header className="flex items-center justify-between px-4 py-5 sm:px-10">
-        <Link
-          href="/belajar"
-          className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
-        >
-          ← Jenjang
-        </Link>
+        <BackButton href="/belajar" label="Kembali ke jenjang" />
         <span className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50">Adventure</span>
         <Link
           href="/adventure/ranking"

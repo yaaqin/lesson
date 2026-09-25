@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useRequireNickname } from "@/hooks/use-profile";
 import { ProfileForm } from "@/components/profile-form";
 import { InstallAppButton } from "@/components/install-app";
+import { BackButton } from "@/components/back-button";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -31,14 +31,9 @@ export default function ProfilePage() {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       <header className="flex items-center justify-between px-4 py-5 sm:px-10">
-        <Link
-          href="/belajar"
-          className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
-        >
-          ← Kembali
-        </Link>
+        <BackButton href="/belajar" label="Kembali" />
         <span className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50">Profil</span>
-        <span className="w-16" />
+        <span className="w-9" />
       </header>
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 pb-10">
