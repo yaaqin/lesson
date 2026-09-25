@@ -63,10 +63,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 
 	api := http.NewServeMux()
-	registerAuthRoutes(api, s)  // shared: dipakai userApp & dashboard (login/register akun)
-	registerAppRoutes(api, s)   // dipakai apps/web (userApp / end-user)
-	registerOrgRoutes(api, s)   // dipakai apps/dashboard -> /org (organization owner/admin/teacher)
-	registerAdminRoutes(api, s) // dipakai apps/dashboard -> /admin (platform admin/superadmin)
+	registerAuthRoutes(api, s)   // shared: dipakai userApp & dashboard (login/register akun)
+	registerAppRoutes(api, s)    // dipakai apps/web (userApp / end-user)
+	registerOrgRoutes(api, s)    // dipakai apps/dashboard -> /org (organization owner/admin/teacher)
+	registerAdminRoutes(api, s)  // dipakai apps/dashboard -> /admin (platform admin/superadmin)
+	registerPublicRoutes(api, s) // tanpa login: kartu share & halaman undangan apps/web
 
 	s.mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api))
 }

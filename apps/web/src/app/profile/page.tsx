@@ -7,6 +7,7 @@ import { useRequireNickname } from "@/hooks/use-profile";
 import { ProfileForm } from "@/components/profile-form";
 import { InstallAppButton } from "@/components/install-app";
 import { BackButton } from "@/components/back-button";
+import { ShareButton } from "@/components/share-button";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -46,6 +47,15 @@ export default function ProfilePage() {
           <Stat label="Streak terlama" value={`${me.longestStreak}`} />
           <Stat label="Nyawa" value={`❤️ ${me.livesRemaining}`} />
         </div>
+
+        {me.nickname && (
+          <ShareButton
+            nickname={me.nickname}
+            kind="streak"
+            label="Bagikan streak 🔥"
+            className="flex items-center justify-center gap-2 rounded-full border border-orange-300 bg-orange-50 px-6 py-3 text-sm font-semibold text-orange-600 transition-colors hover:bg-orange-100 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400"
+          />
+        )}
 
         <InstallAppButton />
       </main>

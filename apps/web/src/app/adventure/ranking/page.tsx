@@ -10,6 +10,8 @@ import {
   type AdventureLeaderboardEntry,
 } from "@/hooks/use-adventure";
 import { UserAvatar } from "@/components/user-avatar";
+import { ShareButton } from "@/components/share-button";
+import { useMeQuery } from "@/hooks/use-curriculum";
 import { formatDuration, formatTimePercent } from "@/lib/duration";
 import { BackButton } from "@/components/back-button";
 
@@ -22,6 +24,7 @@ export default function AdventureRankingPage() {
   useRequireNickname();
 
   const leaderboardQuery = useAdventureLeaderboardQuery();
+  const nickname = useMeQuery().data?.nickname;
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -53,6 +56,14 @@ export default function AdventureRankingPage() {
         {board && (
           <>
             <RulesCard board={board} />
+            {nickname && (
+              <ShareButton
+                nickname={nickname}
+                kind="adventure"
+                label={board.me || board.entries.some((e) => e.isMe) ? "Bagikan peringkatku & ajak teman" : "Ajak teman ikut Adventure"}
+                className="flex items-center justify-center gap-2 rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+              />
+            )}
             {board.entries.length === 0 ? (
               <p className="text-sm text-zinc-500">Belum ada yang lulus checkpoint. Jadilah yang pertama!</p>
             ) : (

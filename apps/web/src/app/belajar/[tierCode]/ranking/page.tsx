@@ -5,12 +5,15 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useRequireNickname } from "@/hooks/use-profile";
 import {
+  useMeQuery,
   useTierLeaderboardQuery,
   type TierLeaderboard,
   type TierLeaderboardEntry,
 } from "@/hooks/use-curriculum";
 import { UserAvatar } from "@/components/user-avatar";
 import { BackButton } from "@/components/back-button";
+import { ShareButton } from "@/components/share-button";
+import type { ShareKind } from "@/lib/share";
 
 const MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
@@ -22,6 +25,7 @@ export default function TierRankingPage() {
   useRequireNickname();
 
   const leaderboardQuery = useTierLeaderboardQuery(params.tierCode);
+  const nickname = useMeQuery().data?.nickname;
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -56,6 +60,14 @@ export default function TierRankingPage() {
         {board && (
           <>
             <RulesCard board={board} />
+            {nickname && (
+              <ShareButton
+                nickname={nickname}
+                kind={board.tierCode as ShareKind}
+                label={isRanked(board) ? "Bagikan peringkatku & ajak teman" : "Ajak teman latihan bareng"}
+                className="flex items-center justify-center gap-2 rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+              />
+            )}
             {board.entries.length === 0 ? (
               <p className="text-sm text-zinc-500">Belum ada yang ngumpulin poin di jenjang ini. Jadilah yang pertama!</p>
             ) : (
@@ -78,6 +90,10 @@ export default function TierRankingPage() {
       </main>
     </div>
   );
+}
+
+function isRanked(board: TierLeaderboard) {
+  return board.me !== null || board.entries.some((e) => e.isMe);
 }
 
 function RulesCard({ board }: { board: TierLeaderboard }) {
