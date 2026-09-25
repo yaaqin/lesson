@@ -64,6 +64,20 @@ export default function TierPickerPage() {
           </p>
         </div>
 
+        <Link
+          href="/adventure"
+          className="flex items-center gap-4 rounded-2xl border-2 border-blue-600 bg-white px-5 py-5 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:bg-zinc-900 dark:hover:bg-blue-500/10"
+        >
+          <span className="text-3xl">🗺️</span>
+          <span className="flex flex-1 flex-col gap-0.5">
+            <span className="font-semibold text-black dark:text-zinc-50">Adventure</span>
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              4.000 soal campuran SD sampai Kampus, checkpoint tiap 100 soal.
+            </span>
+          </span>
+          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Main →</span>
+        </Link>
+
         {tiersQuery.isLoading && (
           <p className="text-sm text-zinc-500 dark:text-zinc-500">Memuat jenjang…</p>
         )}

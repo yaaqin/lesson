@@ -23,6 +23,12 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("POST /app/attempts/{attemptId}/submit", s.handleSubmitAttempt)
 	mux.HandleFunc("POST /app/attempts/{attemptId}/security-events", s.handleRecordSecurityEvents)
 
+	// Adventure (mode jalan terus lintas jenjang, lihat curriculumsvc/adventure.go)
+	mux.HandleFunc("GET /app/adventure", s.handleGetAdventure)
+	mux.HandleFunc("POST /app/adventure/start", s.handleStartAdventure)
+	mux.HandleFunc("POST /app/adventure/rollback", s.handleRollbackAdventure)
+	mux.HandleFunc("POST /app/adventure/attempts/{attemptId}/answer", s.handleAnswerAdventure)
+
 	// Ujian organisasi — sisi murid (pembuatan/pengelolaan ujian ada di routes_org.go)
 	mux.HandleFunc("POST /app/exams/{examId}/start", s.notImplemented)
 	mux.HandleFunc("POST /app/organization-exam-attempts/{attemptId}/submit", s.notImplemented)
