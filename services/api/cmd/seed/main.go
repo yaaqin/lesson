@@ -32,8 +32,8 @@ func main() {
 	)
 
 	seedAccount(ctx, pool,
-		getEnv("SEED_STUDENT_EMAIL", "siswa@mathquest.dev"),
-		getEnv("SEED_STUDENT_PASSWORD", "siswa12345"),
+		getEnv("SEED_STUDENT_EMAIL", "siswa@lesson.com"),
+		getEnv("SEED_STUDENT_PASSWORD", "Lesson123"),
 		getEnv("SEED_STUDENT_NAME", "Siswa Demo"),
 		"student",
 	)

@@ -53,7 +53,7 @@ export default function LoginScreen() {
           <TextInput
             value={email}
             onChangeText={setEmail}
-            placeholder="siswa@mathquest.dev"
+            placeholder="siswa@lesson.com"
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             keyboardType="email-address"
@@ -108,9 +108,9 @@ export default function LoginScreen() {
           ]}
         >
           <Text style={[styles.hintTitle, { color: theme.textSecondary }]}>Akun contoh</Text>
-          <Text style={[styles.hintMono, { color: theme.text }]}>siswa@mathquest.dev</Text>
+          <Text style={[styles.hintMono, { color: theme.text }]}>siswa@lesson.com</Text>
           <Text style={[styles.hintMono, { color: theme.textSecondary }]}>
-            password: siswa12345
+            password: Lesson123
           </Text>
         </View>
       </View>

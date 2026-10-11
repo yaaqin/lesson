@@ -97,7 +97,7 @@ function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="rounded-lg border border-black/[.08] bg-transparent px-3 py-2 text-black outline-none focus:border-blue-500 dark:border-white/[.145] dark:text-zinc-50"
-              placeholder="siswa@mathquest.dev"
+              placeholder="siswa@lesson.com"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -131,9 +131,9 @@ function LoginForm() {
       <div className="flex w-full max-w-sm flex-col gap-1 rounded-2xl border border-dashed border-black/[.08] p-4 text-xs text-zinc-500 dark:border-white/[.145] dark:text-zinc-500">
         <span className="font-medium text-zinc-600 dark:text-zinc-400">Akun contoh</span>
         <div className="flex items-center justify-between">
-          <span className="font-mono">siswa@mathquest.dev</span>
+          <span className="font-mono">siswa@lesson.com</span>
         </div>
-        <span className="font-mono text-zinc-400 dark:text-zinc-600">password: siswa12345</span>
+        <span className="font-mono text-zinc-400 dark:text-zinc-600">password: Lesson123</span>
       </div>
     </div>
   );
