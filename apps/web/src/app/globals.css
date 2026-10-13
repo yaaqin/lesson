@@ -52,3 +52,64 @@ body {
     animation: none;
   }
 }
+
+/* CuteDialog (components/cute-dialog.tsx): kartu muncul membal, maskot goyang. */
+@keyframes cute-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes cute-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(16px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03) translateY(-2px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes cute-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-12deg) scale(1.05);
+  }
+  40% {
+    transform: rotate(10deg) scale(1.05);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  80% {
+    transform: rotate(4deg);
+  }
+}
+
+.cute-backdrop {
+  animation: cute-fade-in 150ms ease-out;
+}
+
+.cute-pop {
+  animation: cute-pop-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cute-wiggle {
+  display: inline-block;
+  animation: cute-wiggle 1.2s ease-in-out 200ms 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cute-backdrop,
+  .cute-pop,
+  .cute-wiggle {
+    animation: none;
+  }
+}

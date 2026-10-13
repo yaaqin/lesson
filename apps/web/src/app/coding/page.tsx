@@ -11,7 +11,7 @@ import { clearPostLoginPath, rememberPostLoginPath } from "@/lib/post-login";
 
 // Hub pelajaran Coding Dasar -- dipisah dari /belajar (khusus matematika).
 // Kuis = tier "coding" (latihan soal PG kayak jenjang matematika), Course =
-// mode belajar materi, konsepnya nyusul.
+// materi + latihan per module (/coding/course, services/api coursesvc).
 export default function CodingHubPage() {
   const router = useRouter();
   const session = useAuthStore((s) => s.session);
@@ -76,16 +76,19 @@ export default function CodingHubPage() {
           <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Mulai →</span>
         </Link>
 
-        <div className="relative flex items-center gap-4 rounded-2xl border-2 border-dashed border-black/[.08] bg-white/50 px-5 py-5 text-zinc-400 dark:border-white/[.145] dark:bg-zinc-900/40 dark:text-zinc-600">
-          <span className="absolute -top-2.5 right-4 rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-zinc-600 uppercase dark:bg-zinc-700 dark:text-zinc-300">
-            Soon
-          </span>
-          <span className="text-3xl grayscale">📚</span>
+        <Link
+          href="/coding/course"
+          className="flex items-center gap-4 rounded-2xl border-2 border-sky-500 bg-white px-5 py-5 transition-colors hover:bg-sky-50 dark:border-sky-400 dark:bg-zinc-900 dark:hover:bg-sky-500/10"
+        >
+          <span className="text-3xl">📚</span>
           <span className="flex flex-1 flex-col gap-0.5">
-            <span className="font-semibold">Course</span>
-            <span className="text-sm">Belajar materi step by step. Segera hadir.</span>
+            <span className="font-semibold text-black dark:text-zinc-50">Course</span>
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              Belajar materi step by step: Tipe Variabel → Looping → Asynchronous. Tanpa nyawa.
+            </span>
           </span>
-        </div>
+          <span className="text-sm font-medium text-sky-600 dark:text-sky-400">Belajar →</span>
+        </Link>
       </main>
     </div>
   );

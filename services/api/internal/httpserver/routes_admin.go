@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"lesson/api/internal/coursesvc"
 	"lesson/api/internal/curriculumsvc"
 )
 
@@ -72,6 +73,45 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	// + jatah awal bikin room buat user baru.
 	mux.HandleFunc("GET /admin/multiplayer/config", s.handleAdminGetMultiplayerConfig)
 	mux.HandleFunc("PUT /admin/multiplayer/config", s.handleAdminUpdateMultiplayerConfig)
+
+	// Course Coding Dasar: cara nampilin pembahasan setelah submit.
+	mux.HandleFunc("GET /admin/course/config", s.handleAdminGetCourseConfig)
+	mux.HandleFunc("PUT /admin/course/config", s.handleAdminUpdateCourseConfig)
+}
+
+func (s *Server) handleAdminGetCourseConfig(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	cfg, err := s.course.GetConfig(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+// handleAdminUpdateCourseConfig: berlaku buat submit setelah ini.
+func (s *Server) handleAdminUpdateCourseConfig(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req coursesvc.Config
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	if err := s.course.AdminUpdateConfig(r.Context(), req); err != nil {
+		if errors.Is(err, coursesvc.ErrInvalidConfig) {
+			writeError(w, http.StatusBadRequest, "invalid_config")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleAdminGetMultiplayerConfig(w http.ResponseWriter, r *http.Request) {

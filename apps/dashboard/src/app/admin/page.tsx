@@ -203,6 +203,16 @@ export default function AdminDashboardPage() {
           </span>
         </Link>
 
+        <Link
+          href="/admin/course"
+          className="flex flex-col gap-1 rounded-2xl border border-black/[.08] bg-white p-5 transition-colors hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900"
+        >
+          <span className="font-semibold text-black dark:text-zinc-50">Pengaturan Course →</span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-500">
+            Atur pembahasan Course Coding Dasar setelah murid ngumpulin jawaban: tampil penuh, tampil beberapa detik, atau cuma benar/salah.
+          </span>
+        </Link>
+
         <section className="flex flex-col gap-3 rounded-2xl border border-dashed border-black/[.08] p-5 text-sm text-zinc-500 dark:border-white/[.145] dark:text-zinc-500">
           <span className="font-medium text-zinc-600 dark:text-zinc-400">Segera hadir</span>
           <span>Bank soal global, tambah tier baru, dan statistik platform.</span>

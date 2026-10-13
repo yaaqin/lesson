@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"lesson/api/internal/authsvc"
+	"lesson/api/internal/coursesvc"
 	"lesson/api/internal/curriculumsvc"
 	"lesson/api/internal/multiplayer"
 )
@@ -16,6 +17,7 @@ type Server struct {
 	db             *pgxpool.Pool
 	auth           *authsvc.Service
 	curriculum     *curriculumsvc.Service
+	course         *coursesvc.Service
 	multiplayer    *multiplayer.Hub
 	mux            *http.ServeMux
 	allowedOrigins map[string]struct{}
@@ -25,7 +27,7 @@ type Server struct {
 	webAppURL        string
 }
 
-func New(db *pgxpool.Pool, auth *authsvc.Service, curriculum *curriculumsvc.Service, mp *multiplayer.Hub, allowedOrigins []string, webAppURL string) *Server {
+func New(db *pgxpool.Pool, auth *authsvc.Service, curriculum *curriculumsvc.Service, course *coursesvc.Service, mp *multiplayer.Hub, allowedOrigins []string, webAppURL string) *Server {
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		originSet[o] = struct{}{}
@@ -35,6 +37,7 @@ func New(db *pgxpool.Pool, auth *authsvc.Service, curriculum *curriculumsvc.Serv
 		db:               db,
 		auth:             auth,
 		curriculum:       curriculum,
+		course:           course,
 		multiplayer:      mp,
 		mux:              http.NewServeMux(),
 		allowedOrigins:   originSet,
@@ -72,6 +75,7 @@ func (s *Server) routes() {
 	api := http.NewServeMux()
 	registerAuthRoutes(api, s)        // shared: dipakai userApp & dashboard (login/register akun)
 	registerAppRoutes(api, s)         // dipakai apps/web (userApp / end-user)
+	registerCourseRoutes(api, s)      // apps/web Course Coding Dasar (materi + latihan, tanpa nyawa)
 	registerMultiplayerRoutes(api, s) // apps/web mode main bareng (WebSocket)
 	registerOrgRoutes(api, s)         // dipakai apps/dashboard -> /org (organization owner/admin/teacher)
 	registerAdminRoutes(api, s)       // dipakai apps/dashboard -> /admin (platform admin/superadmin)

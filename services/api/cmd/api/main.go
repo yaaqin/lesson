@@ -9,6 +9,7 @@ import (
 
 	"lesson/api/internal/authsvc"
 	"lesson/api/internal/config"
+	"lesson/api/internal/coursesvc"
 	"lesson/api/internal/curriculumsvc"
 	"lesson/api/internal/httpserver"
 	"lesson/api/internal/multiplayer"
@@ -29,8 +30,9 @@ func main() {
 		RedirectURL:  cfg.GoogleRedirectURL,
 	})
 	curriculum := curriculumsvc.NewService(db)
+	course := coursesvc.NewService(db)
 	mp := multiplayer.NewHub(curriculum)
-	srv := httpserver.New(db, auth, curriculum, mp, cfg.AllowedOrigins, cfg.WebAppURL)
+	srv := httpserver.New(db, auth, curriculum, course, mp, cfg.AllowedOrigins, cfg.WebAppURL)
 
 	log.Printf("api listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, srv.Handler()); err != nil {
