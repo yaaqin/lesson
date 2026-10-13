@@ -15,7 +15,8 @@ import (
 	"lesson/api/internal/config"
 )
 
-// Seed konten kurikulum: 3 tier (SD, SMP, SMK/SMA), masing-masing 1 batch,
+// Seed konten kurikulum: tier matematika (SD, SMP, SMK/SMA, Kampus) + tier
+// Coding Dasar (coding.go, subject 'coding'). Awalnya 3 tier, masing-masing 1 batch,
 // 5 challenge biasa + 1 challenge ujian, soal digenerate procedural (bukan
 // hardcoded) biar variatif tiap kali database di-reset dari nol.
 //
@@ -23,8 +24,11 @@ import (
 // sama) udah ada, soalnya TIDAK digenerate ulang -- supaya rerun gak nimpa
 // time_limit_seconds yang udah diedit admin dari dashboard.
 
+// label != "" = opsi teks (soal coding), value-nya cuma indeks 0..n-1 buat
+// identitas opsi pas submit (lihat migrations/0015).
 type option struct {
 	value     float64
+	label     string
 	isCorrect bool
 }
 
@@ -48,10 +52,13 @@ type batchSpec struct {
 	challenges []challengeSpec
 }
 
+// subject kosong = matematika. orderIndex 0 = pakai urutan di slice tiers.
 type tierSpec struct {
-	code    string
-	name    string
-	batches []batchSpec
+	code       string
+	name       string
+	subject    string
+	orderIndex int
+	batches    []batchSpec
 }
 
 func main() {
@@ -64,10 +71,17 @@ func main() {
 	}
 	defer pool.Close()
 
-	tiers := []tierSpec{sdTierSpec(), smpTierSpec(), smkTierSpec(), kampusTierSpec()}
+	tiers := []tierSpec{sdTierSpec(), smpTierSpec(), smkTierSpec(), kampusTierSpec(), codingTierSpec()}
 
 	for tierOrder, tier := range tiers {
-		tierID, err := getOrCreateTier(ctx, pool, tier.code, tier.name, tierOrder)
+		if tier.orderIndex != 0 {
+			tierOrder = tier.orderIndex
+		}
+		subject := tier.subject
+		if subject == "" {
+			subject = "matematika"
+		}
+		tierID, err := getOrCreateTier(ctx, pool, tier.code, tier.name, subject, tierOrder)
 		if err != nil {
 			log.Fatalf("tier %s: %v", tier.code, err)
 		}
@@ -104,7 +118,7 @@ func main() {
 	fmt.Println("\nSeed kurikulum selesai.")
 }
 
-func getOrCreateTier(ctx context.Context, pool *pgxpool.Pool, code, name string, orderIndex int) (string, error) {
+func getOrCreateTier(ctx context.Context, pool *pgxpool.Pool, code, name, subject string, orderIndex int) (string, error) {
 	var id string
 	err := pool.QueryRow(ctx, `SELECT id FROM tiers WHERE code = $1`, code).Scan(&id)
 	if err == nil {
@@ -114,10 +128,10 @@ func getOrCreateTier(ctx context.Context, pool *pgxpool.Pool, code, name string,
 		return "", err
 	}
 	err = pool.QueryRow(ctx, `
-		INSERT INTO tiers (code, name, uses_batch, order_index)
-		VALUES ($1, $2, true, $3)
+		INSERT INTO tiers (code, name, uses_batch, order_index, subject)
+		VALUES ($1, $2, true, $3, $4)
 		RETURNING id
-	`, code, name, orderIndex).Scan(&id)
+	`, code, name, orderIndex, subject).Scan(&id)
 	return id, err
 }
 
@@ -175,10 +189,14 @@ func insertQuestions(ctx context.Context, pool *pgxpool.Pool, challengeID string
 			return err
 		}
 		for _, opt := range q.options {
+			var label *string
+			if opt.label != "" {
+				label = &opt.label
+			}
 			if _, err := pool.Exec(ctx, `
-				INSERT INTO question_options (question_id, option_value, is_correct)
-				VALUES ($1, $2, $3)
-			`, questionID, opt.value, opt.isCorrect); err != nil {
+				INSERT INTO question_options (question_id, option_value, option_label, is_correct)
+				VALUES ($1, $2, $3, $4)
+			`, questionID, opt.value, label, opt.isCorrect); err != nil {
 				return err
 			}
 		}

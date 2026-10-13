@@ -122,7 +122,7 @@ func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]
 	rows, err := s.db.Query(ctx, `
 		SELECT
 			q.id, q.question_type, q.prompt, q.correct_answer_value,
-			qo.option_value, qo.is_correct,
+			qo.option_value, qo.option_label, qo.is_correct,
 			pq.kind, pq.payload
 		FROM questions q
 		LEFT JOIN question_options qo ON qo.question_id = q.id
@@ -142,11 +142,12 @@ func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]
 			qID, qType, prompt string
 			correctAnswer      *float64
 			optValue           *float64
+			optLabel           *string
 			isCorrect          *bool
 			puzzleKind         *string
 			puzzlePayloadRaw   []byte
 		)
-		if err := rows.Scan(&qID, &qType, &prompt, &correctAnswer, &optValue, &isCorrect, &puzzleKind, &puzzlePayloadRaw); err != nil {
+		if err := rows.Scan(&qID, &qType, &prompt, &correctAnswer, &optValue, &optLabel, &isCorrect, &puzzleKind, &puzzlePayloadRaw); err != nil {
 			return nil, err
 		}
 		q, ok := byID[qID]
@@ -164,7 +165,7 @@ func (s *Service) loadPublishedBank(ctx context.Context, challengeID string) ([]
 			order = append(order, qID)
 		}
 		if optValue != nil && isCorrect != nil {
-			q.Options = append(q.Options, QuestionOption{Value: *optValue, IsCorrect: *isCorrect})
+			q.Options = append(q.Options, QuestionOption{Value: *optValue, Label: optLabel, IsCorrect: *isCorrect})
 		}
 	}
 	if err := rows.Err(); err != nil {

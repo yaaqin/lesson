@@ -85,10 +85,10 @@ export default function Home() {
           </p>
 
           {/* Subject selector */}
-          <div className="grid w-full max-w-md grid-cols-2 gap-3">
+          <div className="grid w-full max-w-lg grid-cols-3 gap-3">
             <Link
               href="/belajar"
-              className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-blue-600 bg-white px-4 py-5 shadow-sm transition-colors dark:border-blue-500 dark:bg-zinc-900"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-blue-600 bg-white px-2 py-5 sm:px-4 shadow-sm transition-colors dark:border-blue-500 dark:bg-zinc-900"
             >
               <span className="text-2xl">➗</span>
               <span className="font-semibold text-black dark:text-zinc-50">
@@ -98,7 +98,7 @@ export default function Home() {
                 Pilih pelajaran ini
               </span>
             </Link>
-            <div className="relative flex flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-black/[.08] bg-white/50 px-4 py-5 text-zinc-400 dark:border-white/[.145] dark:bg-zinc-900/40 dark:text-zinc-600">
+            <div className="relative flex flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-black/[.08] bg-white/50 px-2 py-5 sm:px-4 text-zinc-400 dark:border-white/[.145] dark:bg-zinc-900/40 dark:text-zinc-600">
               <span className="absolute -top-2.5 right-3 rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-zinc-600 uppercase dark:bg-zinc-700 dark:text-zinc-300">
                 Soon
               </span>
@@ -106,6 +106,18 @@ export default function Home() {
               <span className="font-semibold">Sains</span>
               <span className="text-xs">Segera hadir</span>
             </div>
+            <Link
+              href="/coding"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-emerald-500 bg-white px-2 py-5 sm:px-4 shadow-sm transition-colors hover:bg-emerald-50 dark:border-emerald-400 dark:bg-zinc-900 dark:hover:bg-emerald-500/10"
+            >
+              <span className="text-2xl">💻</span>
+              <span className="font-semibold text-black dark:text-zinc-50">
+                Coding Dasar
+              </span>
+              <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                JavaScript
+              </span>
+            </Link>
           </div>
 
           <a

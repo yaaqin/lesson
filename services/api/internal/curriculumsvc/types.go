@@ -9,7 +9,15 @@ type Tier struct {
 	Code      string `json:"code"`
 	Name      string `json:"name"`
 	UsesBatch bool   `json:"usesBatch"`
+	Subject   string `json:"subject"`
 }
+
+// Pelajaran (tiers.subject, migrations/0015). SubjectMath = default semua tier
+// lama; SubjectCoding = Coding Dasar (JavaScript), opsi PG-nya berupa teks.
+const (
+	SubjectMath   = "matematika"
+	SubjectCoding = "coding"
+)
 
 type Batch struct {
 	ID   string `json:"id"`
@@ -55,8 +63,11 @@ const (
 	PuzzleKindCryptarithm  = "cryptarithm"
 )
 
+// QuestionOption: Label keisi buat opsi teks (soal coding) -- Value tetep
+// dipakai sebagai identitas opsi pas submit, Label yang ditampilin klien.
 type QuestionOption struct {
 	Value     float64 `json:"value"`
+	Label     *string `json:"label,omitempty"`
 	IsCorrect bool    `json:"isCorrect"`
 }
 
@@ -198,6 +209,7 @@ type AdminCategory struct {
 
 type AdminQuestionOption struct {
 	Value     float64 `json:"value"`
+	Label     *string `json:"label,omitempty"`
 	IsCorrect bool    `json:"isCorrect"`
 }
 

@@ -28,9 +28,11 @@ export default function TierBatchPage() {
   }, [hasHydrated, session, router]);
 
   const meQuery = useMeQuery();
-  const tiersQuery = useTiersQuery();
+  const tiersQuery = useTiersQuery("all");
   const tier = tiersQuery.data?.find((t) => t.code === params.tierCode);
   const usesBatch = tier?.usesBatch ?? true;
+  // Kuis coding diakses dari hub /coding, bukan picker jenjang matematika.
+  const homeHref = tier?.subject === "coding" ? "/coding" : "/belajar";
 
   const batchesQuery = useBatchesQuery(params.tierCode);
   const batches = usesBatch ? batchesQuery.data : undefined;
@@ -52,7 +54,7 @@ export default function TierBatchPage() {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link href="/belajar" className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50">
+        <Link href={homeHref} className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50">
           MathQuest
         </Link>
         <div className="flex items-center gap-4 text-sm">
@@ -70,7 +72,7 @@ export default function TierBatchPage() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-8">
         <div className="flex flex-col gap-1">
           <div className="-ml-2 flex items-center gap-1">
-            <BackButton href="/belajar" label="Ganti jenjang" />
+            <BackButton href={homeHref} label={tier?.subject === "coding" ? "Kembali ke Coding" : "Ganti jenjang"} />
             <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">{tier?.name ?? params.tierCode.toUpperCase()}</h1>
             {TIER_LEADERBOARD_CODES.includes(params.tierCode) && (
               <Link

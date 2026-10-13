@@ -166,6 +166,7 @@ func (s *Server) handleAdminListQuestions(w http.ResponseWriter, r *http.Request
 
 type questionOptionRequest struct {
 	Value     float64 `json:"value"`
+	Label     *string `json:"label"`
 	IsCorrect bool    `json:"isCorrect"`
 }
 
@@ -187,7 +188,7 @@ func normalizeQuestionType(t string) string {
 func toAdminOptions(input []questionOptionRequest) []curriculumsvc.AdminQuestionOption {
 	options := make([]curriculumsvc.AdminQuestionOption, len(input))
 	for i, o := range input {
-		options[i] = curriculumsvc.AdminQuestionOption{Value: o.Value, IsCorrect: o.IsCorrect}
+		options[i] = curriculumsvc.AdminQuestionOption{Value: o.Value, Label: o.Label, IsCorrect: o.IsCorrect}
 	}
 	return options
 }

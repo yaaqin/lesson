@@ -18,7 +18,7 @@ var (
 // dengan loadPublishedBank di gameplay.go yang cuma ambil status published).
 func (s *Service) AdminListQuestions(ctx context.Context, challengeID string) ([]AdminQuestion, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT q.id, q.question_type, q.prompt, q.status, q.correct_answer_value, qo.option_value, qo.is_correct
+		SELECT q.id, q.question_type, q.prompt, q.status, q.correct_answer_value, qo.option_value, qo.option_label, qo.is_correct
 		FROM questions q
 		LEFT JOIN question_options qo ON qo.question_id = q.id
 		WHERE q.challenge_id = $1
@@ -36,9 +36,10 @@ func (s *Service) AdminListQuestions(ctx context.Context, challengeID string) ([
 			id, qType, prompt, status string
 			correctAnswer             *float64
 			optValue                  *float64
+			optLabel                  *string
 			isCorrect                 *bool
 		)
-		if err := rows.Scan(&id, &qType, &prompt, &status, &correctAnswer, &optValue, &isCorrect); err != nil {
+		if err := rows.Scan(&id, &qType, &prompt, &status, &correctAnswer, &optValue, &optLabel, &isCorrect); err != nil {
 			return nil, err
 		}
 		q, ok := byID[id]
@@ -53,7 +54,7 @@ func (s *Service) AdminListQuestions(ctx context.Context, challengeID string) ([
 			order = append(order, id)
 		}
 		if optValue != nil && isCorrect != nil {
-			q.Options = append(q.Options, AdminQuestionOption{Value: *optValue, IsCorrect: *isCorrect})
+			q.Options = append(q.Options, AdminQuestionOption{Value: *optValue, Label: optLabel, IsCorrect: *isCorrect})
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -162,9 +163,9 @@ func (s *Service) AdminUpdateQuestion(
 func (s *Service) insertOptions(ctx context.Context, questionID string, options []AdminQuestionOption) error {
 	for _, opt := range options {
 		if _, err := s.db.Exec(ctx, `
-			INSERT INTO question_options (question_id, option_value, is_correct)
-			VALUES ($1, $2, $3)
-		`, questionID, opt.Value, opt.IsCorrect); err != nil {
+			INSERT INTO question_options (question_id, option_value, option_label, is_correct)
+			VALUES ($1, $2, $3, $4)
+		`, questionID, opt.Value, opt.Label, opt.IsCorrect); err != nil {
 			return err
 		}
 	}

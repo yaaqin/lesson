@@ -237,7 +237,7 @@ function QuestionRow({
                   : "bg-black/[.06] text-zinc-600 dark:bg-white/[.08] dark:text-zinc-400"
               }`}
             >
-              {opt.value} {opt.isCorrect && "✓"}
+              {opt.label ?? opt.value} {opt.isCorrect && "✓"}
             </span>
           ))}
         </div>

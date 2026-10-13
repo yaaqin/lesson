@@ -2,7 +2,8 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { publicApi, privateApi } from "@/lib/http";
 import type { SecurityEvent } from "@/hooks/use-security-event-reporter";
 
-export type Tier = { id: string; code: string; name: string; usesBatch: boolean };
+export type Subject = "matematika" | "coding";
+export type Tier = { id: string; code: string; name: string; usesBatch: boolean; subject: Subject };
 export type Batch = { id: string; name: string };
 export type Category = { id: string; code: string; name: string };
 
@@ -24,7 +25,9 @@ export type ChallengeListItem = {
 };
 
 export type QuestionType = "multiple_choice" | "essay_numeric" | "grid_puzzle";
-export type QuestionOption = { value: number; isCorrect: boolean };
+// label keisi buat opsi teks (soal coding) -- value tetep yang dikirim pas
+// submit, label yang ditampilin.
+export type QuestionOption = { value: number; label?: string; isCorrect: boolean };
 
 // PuzzlePayload: bentuk publik puzzle (grid_puzzle) -- gak pernah bawa solusi,
 // cuma given + blankKeys yang harus diisi user. Lihat services/api
@@ -98,10 +101,11 @@ export type UserAvatar = {
   googleUrl: string | null;
 };
 
-export function useTiersQuery() {
+// subject "all" = tier semua pelajaran (buat halaman yang cuma tau tierCode).
+export function useTiersQuery(subject: Subject | "all" = "matematika") {
   return useQuery({
-    queryKey: ["tiers"],
-    queryFn: async () => (await publicApi.get<Tier[]>("/app/tiers")).data,
+    queryKey: ["tiers", subject],
+    queryFn: async () => (await publicApi.get<Tier[]>("/app/tiers", { params: { subject } })).data,
   });
 }
 

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { privateApi } from "@/lib/http";
 
 export type QuestionType = "multiple_choice" | "essay_numeric";
-export type AdminQuestionOption = { value: number; isCorrect: boolean };
+export type AdminQuestionOption = { value: number; label?: string; isCorrect: boolean };
 
 export type AdminQuestion = {
   id: string;

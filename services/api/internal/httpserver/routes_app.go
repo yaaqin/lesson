@@ -51,7 +51,7 @@ func registerAppRoutes(mux *http.ServeMux, s *Server) {
 }
 
 func (s *Server) handleListTiers(w http.ResponseWriter, r *http.Request) {
-	tiers, err := s.curriculum.ListTiers(r.Context())
+	tiers, err := s.curriculum.ListTiers(r.Context(), r.URL.Query().Get("subject"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error")
 		return

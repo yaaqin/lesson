@@ -35,8 +35,10 @@ type MultiplayerSourceTier struct {
 	Batches  []MultiplayerSourceBatch `json:"batches"`
 }
 
-// ListMultiplayerSources: semua tier yang pake batch (tier puzzle kayak
-// "umum" gak ikut) beserta batch-nya dan jumlah soal published di dalemnya.
+// ListMultiplayerSources: semua tier matematika yang pake batch (tier puzzle
+// kayak "umum" gak ikut, tier coding juga belum -- opsinya teks, sedangkan
+// room multiplayer cuma ngerti opsi angka) beserta batch-nya dan jumlah soal
+// published di dalemnya.
 func (s *Service) ListMultiplayerSources(ctx context.Context) ([]MultiplayerSourceTier, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT t.code, t.name, b.id, b.name,
@@ -47,7 +49,7 @@ func (s *Service) ListMultiplayerSources(ctx context.Context) ([]MultiplayerSour
 		LEFT JOIN challenges c ON c.batch_id = b.id
 		LEFT JOIN questions q ON q.challenge_id = c.id AND q.status = 'published'
 			AND q.question_type IN ('multiple_choice', 'essay_numeric')
-		WHERE t.uses_batch
+		WHERE t.uses_batch AND t.subject = 'matematika'
 		GROUP BY t.code, t.name, t.order_index, b.id, b.name, b.order_index
 		ORDER BY t.order_index, b.order_index
 	`)
@@ -106,7 +108,7 @@ func (s *Service) PickMultiplayerQuestions(ctx context.Context, batchIDs []strin
 		JOIN batches b ON b.id = c.batch_id
 		JOIN tiers t ON t.id = b.tier_id
 		LEFT JOIN question_options qo ON qo.question_id = q.id
-		WHERE b.id = ANY($1::uuid[]) AND q.status = 'published'
+		WHERE b.id = ANY($1::uuid[]) AND q.status = 'published' AND t.subject = 'matematika'
 			AND q.question_type IN ('multiple_choice', 'essay_numeric')
 		ORDER BY q.id
 	`, batchIDs)

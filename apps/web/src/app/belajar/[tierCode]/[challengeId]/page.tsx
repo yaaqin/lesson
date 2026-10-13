@@ -20,6 +20,7 @@ import { useFullscreenGuard } from "@/hooks/use-fullscreen-guard";
 import { QuestionGuard } from "@/components/question-guard";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { BackButton } from "@/components/back-button";
+import { OptionText, QuestionPrompt, QuestionPromptSummary, hasTextOptions } from "@/components/question-prompt";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 
@@ -478,7 +479,8 @@ function RegularView({
             </button>
           </div>
         )}
-        <h2
+        <QuestionPrompt
+          prompt={currentQuestion.prompt}
           className={
             isPuzzle
               ? "text-center text-base text-zinc-600 dark:text-zinc-400"
@@ -486,9 +488,7 @@ function RegularView({
                 ? "text-center text-2xl font-semibold tracking-tight text-black sm:text-4xl dark:text-zinc-50"
                 : "text-4xl font-semibold tracking-tight text-black dark:text-zinc-50"
           }
-        >
-          {currentQuestion.prompt}
-        </h2>
+        />
       </div>
 
       {isPuzzle && showPuzzleInfo && currentQuestion.puzzle && (
@@ -508,7 +508,9 @@ function RegularView({
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div
+          className={`grid grid-cols-1 gap-3 ${hasTextOptions(currentQuestion.options) ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}
+        >
           {(currentQuestion.options ?? []).map((opt) => {
             const isSelected = selected === opt.value;
             // Cuma opsi yang dipilih yang dikasih warna -- kalau salah, jawaban bener
@@ -527,7 +529,7 @@ function RegularView({
                       : "border-black/[.08] bg-white text-black hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
                 }`}
               >
-                {opt.value}
+                <OptionText option={opt} />
               </button>
             );
           })}
@@ -613,15 +615,14 @@ function ExamView({
             ✏️ Isian — ketik jawabannya
           </span>
         )}
-        <h2
+        <QuestionPrompt
+          prompt={q.prompt}
           className={
             isEssay
               ? "text-center text-2xl font-semibold tracking-tight text-black sm:text-4xl dark:text-zinc-50"
               : "text-4xl font-semibold tracking-tight text-black dark:text-zinc-50"
           }
-        >
-          {q.prompt}
-        </h2>
+        />
       </div>
 
       {isEssay ? (
@@ -629,7 +630,7 @@ function ExamView({
           <NumericKeypad value={essayDrafts[q.id] ?? ""} onChange={(v) => onEssayChange(q.id, v)} />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className={`grid grid-cols-1 gap-3 ${hasTextOptions(q.options) ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
           {(q.options ?? []).map((opt) => {
             const isSelected = answers[q.id] === opt.value;
             return (
@@ -643,7 +644,7 @@ function ExamView({
                     : "border-black/[.08] bg-white text-black hover:border-blue-400 dark:border-white/[.145] dark:bg-zinc-900 dark:text-zinc-50"
                 }`}
               >
-                {opt.value}
+                <OptionText option={opt} />
               </button>
             );
           })}
@@ -788,9 +789,9 @@ function ResultView({
                 key={q.id}
                 className="flex items-center justify-between rounded-xl border border-black/[.08] bg-white px-4 py-2 dark:border-white/[.145] dark:bg-zinc-900"
               >
-                <span className="text-zinc-600 dark:text-zinc-400">
-                  {idx + 1}. {q.prompt}
-                </span>
+                <div className="min-w-0 text-zinc-600 dark:text-zinc-400">
+                  {idx + 1}. <QuestionPromptSummary prompt={q.prompt} />
+                </div>
                 <span className={passed ? "text-green-600 dark:text-green-400" : "text-red-500"}>
                   {attempted ? (passed ? "Benar ✓" : "Belum tepat ✗") : "— ✗"}
                 </span>
@@ -807,16 +808,21 @@ function ResultView({
             selectedValue !== undefined &&
             correctValue !== undefined &&
             Math.abs(selectedValue - correctValue) < 1e-9;
+          // Opsi teks (soal coding): yang ditampilin label-nya, bukan indeks value.
+          const selectedLabel =
+            selectedValue === undefined
+              ? undefined
+              : (q.options?.find((o) => o.value === selectedValue)?.label ?? selectedValue);
           return (
             <li
               key={q.id}
               className="flex items-center justify-between rounded-xl border border-black/[.08] bg-white px-4 py-2 dark:border-white/[.145] dark:bg-zinc-900"
             >
-              <span className="text-zinc-600 dark:text-zinc-400">
-                {idx + 1}. {q.prompt}
-              </span>
-              <span className={isCorrect ? "text-green-600 dark:text-green-400" : "text-red-500"}>
-                {selectedValue ?? "—"} {isCorrect ? "✓" : "✗"}
+              <div className="min-w-0 text-zinc-600 dark:text-zinc-400">
+                {idx + 1}. <QuestionPromptSummary prompt={q.prompt} />
+              </div>
+              <span className={`shrink-0 ${isCorrect ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+                {selectedLabel ?? "—"} {isCorrect ? "✓" : "✗"}
               </span>
             </li>
           );

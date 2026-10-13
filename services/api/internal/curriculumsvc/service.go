@@ -15,10 +15,18 @@ func NewService(db *pgxpool.Pool) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) ListTiers(ctx context.Context) ([]Tier, error) {
+// ListTiers: tier milik satu pelajaran (subject kosong = matematika, biar
+// klien lama kayak apps/mobile gak tiba-tiba dapet tier coding; "all" = semua
+// pelajaran, dipakai halaman tier yang cuma tau tierCode).
+func (s *Service) ListTiers(ctx context.Context, subject string) ([]Tier, error) {
+	if subject == "" {
+		subject = SubjectMath
+	}
 	rows, err := s.db.Query(ctx, `
-		SELECT id, code, name, uses_batch FROM tiers ORDER BY order_index
-	`)
+		SELECT id, code, name, uses_batch, subject FROM tiers
+		WHERE $1 = 'all' OR subject = $1
+		ORDER BY order_index
+	`, subject)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +35,7 @@ func (s *Service) ListTiers(ctx context.Context) ([]Tier, error) {
 	tiers := []Tier{}
 	for rows.Next() {
 		var t Tier
-		if err := rows.Scan(&t.ID, &t.Code, &t.Name, &t.UsesBatch); err != nil {
+		if err := rows.Scan(&t.ID, &t.Code, &t.Name, &t.UsesBatch, &t.Subject); err != nil {
 			return nil, err
 		}
 		tiers = append(tiers, t)
