@@ -97,7 +97,7 @@ export default function CreateRoomPage() {
     createMutation.mutate(
       { mode, questionCount, format, secondsPerQuestion: seconds, batchIds, hostPlays, showFastest },
       {
-        onSuccess: ({ code }) => router.push(`/multiplayer/${code}`),
+        onSuccess: ({ code }) => router.replace(`/multiplayer/${code}`),
         onError: (err) => setError(CREATE_ERROR_TEXT[errorCode(err) ?? ""] ?? "Gagal bikin room, coba lagi."),
       },
     );

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { PwaSetup } from "@/components/pwa-setup";
 import { ThemeSync } from "@/components/theme-sync";
+import { NavHistoryTracker } from "@/lib/nav-history";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -22,6 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <PwaSetup />
       <ThemeSync />
+      <NavHistoryTracker />
       {children}
     </QueryClientProvider>
   );

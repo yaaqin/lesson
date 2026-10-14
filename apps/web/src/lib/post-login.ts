@@ -1,6 +1,6 @@
 // Tujuan setelah login: dipakai link undangan room multiplayer -- user yang
 // belum login dilempar ke /login (dan mungkin /onboarding, atau muter lewat
-// Google OAuth), abis itu harus balik ke room-nya, bukan ke /belajar.
+// Google OAuth), abis itu harus balik ke room-nya, bukan ke /.
 // Disimpen di sessionStorage (bukan query) biar selamat lewat redirect Google.
 const KEY = "mathquest_post_login_v1";
 const TTL_MS = 30 * 60 * 1000;

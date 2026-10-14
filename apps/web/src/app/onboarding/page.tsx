@@ -22,7 +22,7 @@ export default function OnboardingPage() {
   }, [hasHydrated, session, router]);
 
   useEffect(() => {
-    if (me?.nickname) router.replace(takePostLoginPath("/belajar"));
+    if (me?.nickname) router.replace(takePostLoginPath("/"));
   }, [me, router]);
 
   if (!hasHydrated || !session || !me || me.nickname) {
@@ -43,7 +43,7 @@ export default function OnboardingPage() {
             diganti di halaman profil.
           </p>
         </div>
-        <ProfileForm me={me} submitLabel="Simpan & mulai belajar" onSaved={() => router.replace(takePostLoginPath("/belajar"))} />
+        <ProfileForm me={me} submitLabel="Simpan & mulai belajar" onSaved={() => router.replace(takePostLoginPath("/"))} />
       </div>
     </div>
   );

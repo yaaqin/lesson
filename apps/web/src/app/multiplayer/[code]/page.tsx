@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useGoBack } from "@/lib/nav-history";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useRequireNickname } from "@/hooks/use-profile";
@@ -50,7 +51,7 @@ export default function RoomPage() {
 }
 
 function Room({ code }: { code: string }) {
-  const router = useRouter();
+  const goBack = useGoBack("/multiplayer");
   const { state, status, lastError, clockOffset, send, leave, closeRoom } = useRoomSocket(code);
 
   useEffect(() => clearPostLoginPath(), []);
@@ -78,12 +79,12 @@ function Room({ code }: { code: string }) {
 
   const exit = () => {
     leave();
-    router.push("/multiplayer");
+    goBack();
   };
   // Kill room: host nutup room, semua pemain ikut dikeluarin.
   const kill = () => {
     closeRoom();
-    router.push("/multiplayer");
+    goBack();
   };
 
   return (

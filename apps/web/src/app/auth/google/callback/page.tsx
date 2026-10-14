@@ -38,7 +38,7 @@ export default function GoogleCallbackPage() {
           accessToken,
           refreshToken,
         });
-        router.replace(data.nickname ? takePostLoginPath("/belajar") : "/onboarding");
+        router.replace(data.nickname ? takePostLoginPath("/") : "/onboarding");
       })
       .catch(() => {
         setSession(null);

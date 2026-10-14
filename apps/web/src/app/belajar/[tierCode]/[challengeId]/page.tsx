@@ -20,6 +20,7 @@ import { useFullscreenGuard } from "@/hooks/use-fullscreen-guard";
 import { QuestionGuard } from "@/components/question-guard";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { BackButton } from "@/components/back-button";
+import { useGoBack } from "@/lib/nav-history";
 import { OptionText, QuestionPrompt, QuestionPromptSummary, hasTextOptions } from "@/components/question-prompt";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
@@ -843,6 +844,7 @@ function IntroView({
   fullscreenSupported: boolean;
   onStart: () => void;
 }) {
+  const goBack = useGoBack(`/belajar/${tierCode}`);
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-50 px-6 font-sans dark:bg-black">
       <LivesBadge lives={lives} />
@@ -864,13 +866,14 @@ function IntroView({
           Mulai Challenge
         </button>
       </div>
-      <Link
-        href={`/belajar/${tierCode}`}
+      <button
+        type="button"
+        onClick={goBack}
         className="flex items-center gap-1 text-sm font-medium text-zinc-500 dark:text-zinc-500"
       >
         <HugeiconsIcon icon={ArrowLeft02Icon} size={16} strokeWidth={1.8} />
         Kembali ke daftar
-      </Link>
+      </button>
     </div>
   );
 }

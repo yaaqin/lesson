@@ -37,7 +37,7 @@ function LoginForm() {
     setError(null);
     try {
       await loginMutation.mutateAsync({ identifier: email, password });
-      router.push(takePostLoginPath("/belajar"));
+      router.replace(takePostLoginPath("/"));
     } catch {
       setError("Email atau password salah.");
     }

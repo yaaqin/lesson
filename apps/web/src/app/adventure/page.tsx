@@ -91,16 +91,19 @@ export default function AdventurePage() {
   // popstate) & refresh/tutup tab minta konfirmasi. Keluar cuma lewat tombol
   // Keluar + modal konfirmasi. Kalau user tetap maksa keluar (tutup tab dll),
   // attempt-nya ke-abandon pas start berikutnya dan lanjut dari awal CP.
+  // Entry jebakan ditandai `adventureGuard` & dibuang lagi pas keluar fase
+  // main, biar tombol back di lobby gak nyangkut di /adventure duplikat.
   useEffect(() => {
     if (phase !== "playing") return;
-    window.history.pushState(null, "", window.location.href);
-    const onPopState = () => window.history.pushState(null, "", window.location.href);
+    window.history.pushState({ adventureGuard: true }, "", window.location.href);
+    const onPopState = () => window.history.pushState({ adventureGuard: true }, "", window.location.href);
     const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("popstate", onPopState);
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       window.removeEventListener("popstate", onPopState);
       window.removeEventListener("beforeunload", onBeforeUnload);
+      if (window.history.state?.adventureGuard) window.history.back();
     };
   }, [phase]);
 
