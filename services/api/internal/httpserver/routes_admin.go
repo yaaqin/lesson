@@ -77,6 +77,37 @@ func registerAdminRoutes(mux *http.ServeMux, s *Server) {
 	// Course Coding Dasar: cara nampilin pembahasan setelah submit.
 	mux.HandleFunc("GET /admin/course/config", s.handleAdminGetCourseConfig)
 	mux.HandleFunc("PUT /admin/course/config", s.handleAdminUpdateCourseConfig)
+	// Monitoring progress course: funnel + daftar murid, dan detail per murid.
+	mux.HandleFunc("GET /admin/course/progress", s.handleAdminCourseProgress)
+	mux.HandleFunc("GET /admin/users/{id}/course", s.handleAdminUserCourse)
+}
+
+func (s *Server) handleAdminCourseProgress(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	result, err := s.course.AdminProgress(r.Context(), page, pageSize, r.URL.Query().Get("q"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAdminUserCourse(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authenticateRole(r, "admin", "superadmin"); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	result, err := s.course.AdminUserCourse(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeCourseError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleAdminGetCourseConfig(w http.ResponseWriter, r *http.Request) {

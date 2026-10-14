@@ -37,13 +37,15 @@ type moduleState struct {
 	levelIDs []string
 }
 
-func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, error) {
+// structure: module + level + ukuran bank final test, belum ada progress
+// user (kunci/lulus diisi applyLocks). byID: module id -> indeks.
+func (s *Service) structure(ctx context.Context) ([]moduleState, map[string]int, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT id, code, title, description, exam_question_count, exam_time_limit_seconds, exam_pass_percent
 		FROM course_modules ORDER BY order_index
 	`)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	modules := []moduleState{}
 	byID := map[string]int{}
@@ -52,7 +54,7 @@ func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, e
 		if err := rows.Scan(&m.id, &m.Code, &m.Title, &m.Description,
 			&m.Exam.QuestionCount, &m.Exam.TimeLimitSeconds, &m.Exam.PassPercent); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, nil, err
 		}
 		m.Levels = []LevelItem{}
 		byID[m.id] = len(modules)
@@ -60,7 +62,7 @@ func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, e
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	rows, err = s.db.Query(ctx, `
@@ -68,14 +70,14 @@ func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, e
 		FROM course_levels ORDER BY order_index
 	`)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for rows.Next() {
 		var l LevelItem
 		var moduleID string
 		if err := rows.Scan(&l.ID, &moduleID, &l.Code, &l.Title, &l.Summary, &l.QuestionCount); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, nil, err
 		}
 		if i, ok := byID[moduleID]; ok {
 			modules[i].Levels = append(modules[i].Levels, l)
@@ -84,21 +86,21 @@ func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, e
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	rows, err = s.db.Query(ctx, `
 		SELECT module_id, count(*) FROM course_questions WHERE in_exam GROUP BY module_id
 	`)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for rows.Next() {
 		var moduleID string
 		var n int
 		if err := rows.Scan(&moduleID, &n); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, nil, err
 		}
 		if i, ok := byID[moduleID]; ok {
 			modules[i].Exam.BankSize = n
@@ -106,11 +108,20 @@ func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, e
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	return modules, byID, nil
+}
+
+func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, error) {
+	modules, byID, err := s.structure(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	passedLevels := map[string]bool{}
-	rows, err = s.db.Query(ctx, `
+	rows, err := s.db.Query(ctx, `
 		SELECT DISTINCT level_id FROM course_attempts
 		WHERE user_id = $1 AND passed AND level_id IS NOT NULL
 	`, userID)
@@ -158,6 +169,13 @@ func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, e
 		return nil, err
 	}
 
+	applyLocks(modules, passedLevels)
+	return modules, nil
+}
+
+// applyLocks: isi Locked/Passed/Completed dari level yang udah lulus (Exam.Passed
+// udah diisi duluan) -- aturan kunci lihat komentar di atas Service.
+func applyLocks(modules []moduleState, passedLevels map[string]bool) {
 	prevModuleDone := true
 	for i := range modules {
 		m := &modules[i]
@@ -176,7 +194,6 @@ func (s *Service) overview(ctx context.Context, userID string) ([]moduleState, e
 		m.Completed = m.Exam.Passed
 		prevModuleDone = m.Completed
 	}
-	return modules, nil
 }
 
 func (s *Service) ListModules(ctx context.Context, userID string) ([]ModuleItem, error) {

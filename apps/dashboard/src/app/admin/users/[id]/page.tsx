@@ -14,6 +14,7 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PLATFORM_ROLE_LABEL } from "@/lib/dummy-accounts";
 import { BackButton } from "@/components/back-button";
+import { UserCourseCard } from "@/components/course-progress";
 
 export default function AdminUserDetailPage() {
   const router = useRouter();
@@ -197,6 +198,8 @@ export default function AdminUserDetailPage() {
                 {user.totalAttempts} total attempt · {user.passedAttempts} lulus
               </span>
             </div>
+
+            <UserCourseCard userId={user.id} />
           </>
         )}
       </main>
